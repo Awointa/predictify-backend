@@ -4,6 +4,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/requireAuth";
 import { getPredictionExplanation } from "../services/predictionExplainService";
+import cancelRouter from "./predictions/cancel";
 import { createShareRouter } from "./predictions/share";
 
 export const predictionsRouter = Router();
@@ -18,6 +19,7 @@ export const predictionsRouter = Router();
  * Public — no authentication required.
  */
 predictionsRouter.use("/", createShareRouter());
+predictionsRouter.use("/", cancelRouter);
 
 // ── Authenticated routes ──────────────────────────────────────────────────
 predictionsRouter.use(requireAuth);
