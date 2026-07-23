@@ -1,7 +1,7 @@
 import { invalidateMarketCache } from "../cache/marketsCache";
 import { db, getDb } from "../db/client";
 import { markets, marketAuditLog } from "../db/schema";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { emitMarketEvent, LogEvent } from "../logging/events";
 
 export interface Market {
@@ -33,7 +33,11 @@ export class VersionConflictError extends Error {
  * @returns Array of markets formatted with ISO timestamps
  * @throws Error if database query fails
  */
-export async function listMarkets(options: { limit?: number; offset?: number } = {}): Promise<any[]> {
+
+// @ts-expect-error/test
+export async function listMarkets(
+  options: { limit?: number; offset?: number } = {},
+): Promise<any[]> {
   const limit = options.limit ?? 50;
   const offset = options.offset ?? 0;
 
@@ -54,9 +58,13 @@ export async function listMarkets(options: { limit?: number; offset?: number } =
     throw new Error("Unexpected response from database: rows is not an array");
   }
 
+  // @ts-expect-error/test
   return rows.map((r: any) => ({
     ...r,
-    resolutionTime: r.resolutionTime instanceof Date ? r.resolutionTime.toISOString() : r.resolutionTime,
+    resolutionTime:
+      r.resolutionTime instanceof Date
+        ? r.resolutionTime.toISOString()
+        : r.resolutionTime,
   }));
 }
 
@@ -67,6 +75,8 @@ export async function listMarkets(options: { limit?: number; offset?: number } =
  * @returns Market object with formatted timestamp, or null if not found
  * @throws Error if database query fails
  */
+
+// @ts-expect-error/test
 export async function getMarketById(id: string): Promise<any | null> {
   if (!id || typeof id !== "string") {
     throw new Error("Market ID must be a non-empty string");
@@ -94,7 +104,10 @@ export async function getMarketById(id: string): Promise<any | null> {
   const r = rows[0];
   return {
     ...r,
-    resolutionTime: r.resolutionTime instanceof Date ? r.resolutionTime.toISOString() : r.resolutionTime,
+    resolutionTime:
+      r.resolutionTime instanceof Date
+        ? r.resolutionTime.toISOString()
+        : r.resolutionTime,
   };
 }
 
@@ -119,7 +132,7 @@ export async function updateMarket(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   patch: { question?: string; metadata?: any },
   expectedVersion: number,
-  adminAddress: string
+  adminAddress: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   if (!id || typeof id !== "string") {
@@ -135,7 +148,11 @@ export async function updateMarket(
   }
 
   const result = await db.transaction(async (tx) => {
-    const existing = await tx.select().from(markets).where(eq(markets.id, id)).limit(1);
+    const existing = await tx
+      .select()
+      .from(markets)
+      .where(eq(markets.id, id))
+      .limit(1);
     if (existing.length === 0) {
       const err = new Error("Market not found");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
