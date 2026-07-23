@@ -356,3 +356,40 @@ export const featureFlags = pgTable("feature_flags", {
     .notNull()
     .defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Schema Versions
+// ---------------------------------------------------------------------------
+/**
+ * schema_versions — per-migration checksum registry.
+ *
+ * Each row tracks a single applied Drizzle migration by recording:
+ *   - `version`    — the migration tag (file name without extension), PRIMARY KEY.
+ *   - `checksum`   — hex-encoded SHA-256 of the migration SQL at apply time.
+ *                    64 lower-case hex characters.
+ *   - `appliedAt`  — timestamp at which the row was first written.
+ *   - `appliedBy`  — optional identifier for the process/agent that ran the migration
+ *                    (CI job name, DB user, etc.).
+ *
+ * Drift detection: compare stored checksums against the current file contents.
+ * A mismatch means the migration was modified after it was applied.
+ */
+export const schemaVersions = pgTable(
+  "schema_versions",
+  {
+    version: text("version").primaryKey(),
+    checksum: text("checksum").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    appliedBy: text("applied_by"),
+  },
+  (t) => ({
+    schemaVersionsAppliedAtIdx: index("schema_versions_applied_at_idx").on(
+      t.appliedAt,
+    ),
+  }),
+);
+
+export type SchemaVersion = typeof schemaVersions.$inferSelect;
+export type NewSchemaVersion = typeof schemaVersions.$inferInsert;
