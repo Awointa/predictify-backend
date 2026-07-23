@@ -946,6 +946,67 @@ registry.registerPath({
   },
 });
 
+// ── /api/admin/db/explain ───────────────────────────────────────────────────
+
+const ExplainRequestBody = z
+  .object({
+    queryId: z.string().describe("Allowlisted query ID"),
+    params: z.array(z.any()).default([]).describe("Query parameters"),
+  })
+  .openapi("ExplainRequestBody");
+
+const ExplainResponseBody = z
+  .object({
+    data: z.object({
+      queryId: z.string(),
+      explainPlan: z.array(z.string()),
+    }),
+  })
+  .openapi("ExplainResponseBody");
+
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/db/explain",
+  tags: ["Admin"],
+  summary: "Execute EXPLAIN ANALYZE on allowlisted queries",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: ExplainRequestBody,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Explain plan generated successfully",
+      content: {
+        "application/json": {
+          schema: ExplainResponseBody,
+        },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/admin/health/detail ─────────────────────────────────────────────────
 
 const CheckStatus = z
