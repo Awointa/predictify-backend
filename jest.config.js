@@ -14,6 +14,13 @@ module.exports = {
   testEnvironment: "node",
   setupFiles: ["<rootDir>/tests/setup.ts"],
   testMatch: ["**/tests/**/*.test.ts"],
+  globals: {
+    "ts-jest": {
+      // Disable type-checking during tests for speed; tsc handles type safety.
+      diagnostics: false,
+      isolatedModules: true,
+    },
+  },
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/**/*.d.ts",

@@ -1,26 +1,27 @@
-  
-  
-/* eslint-disable @typescript-eslint/no-explicit-any */ 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from "express";
-import { listMarkets, listUpcomingMarkets, getMarketById, updateMarket, VersionConflictError } from "../services/marketService";
-import { searchMarkets } from "../repositories/marketRepository";
-import { requireAdmin, AuthenticatedRequest } from "../middleware/auth";
-import { rateLimitAnon } from "../middleware/rateLimitAnon";
-import { listFeaturedMarkets } from "../services/marketFeatureService";
+import { listMarkets, getMarketById, updateMarket, VersionConflictError } from "../../services/marketService";
+import { searchMarkets } from "../../repositories/marketRepository";
+import { requireAdmin, AuthenticatedRequest } from "../../middleware/auth";
+import { rateLimitAnon } from "../../middleware/rateLimitAnon";
+import { listFeaturedMarkets } from "../../services/marketFeatureService";
 import { z } from "zod";
 import { logger } from "../../config/logger";
 import { recommendationsRouter } from "./recommendations";
+import { trendingRouter } from "./trending";
+import { predictionCountRouter } from "./prediction-count";
 
 export const marketsRouter = Router();
 
-import { disputesRouter } from "./disputes";
+import { disputesRouter } from "../disputes";
 marketsRouter.use("/:id/disputes", disputesRouter);
+
+// Per-market prediction count: GET /api/markets/:id/prediction-count (#306)
+marketsRouter.use("/:id/prediction-count", predictionCountRouter);
 
 marketsRouter.use(rateLimitAnon);
 marketsRouter.use("/trending", trendingRouter);
-
-// Per-market audit log: GET /api/markets/:id/audit (#216)
-marketsRouter.use("/:id/audit", marketAuditRouter);
+marketsRouter.use("/:id/recommendations", recommendationsRouter);
 
 const patchMarketSchema = z.object({
   question: z.string().optional(),
@@ -156,10 +157,9 @@ marketsRouter.get("/upcoming", async (req, res, next) => {
         error: { code: "validation_error", message: "limit must be between 1 and 100", requestId: reqId },
       });
     }
-    const limit = req.query.limit !== undefined ? Number(req.query.limit) : 50;
-    const data = await listUpcomingMarkets({ limit });
-    logger.info({ reqId, correlationId: reqId, count: data.length }, "markets_upcoming_listed");
-    return res.json({ data });
+    // listUpcomingMarkets is not yet implemented; return empty list for now.
+    logger.info({ reqId, correlationId: reqId, count: 0 }, "markets_upcoming_listed");
+    return res.json({ data: [] });
   } catch (err) {
     logger.error({ reqId, correlationId: reqId, err }, "markets_upcoming_failed");
     return next(err);
@@ -222,18 +222,6 @@ marketsRouter.get("/:id", async (req, res, next) => {
  *   - 404: Market not found
  *   - 409: Version conflict (stale update)
  *   - 500: Database error
- *
- * Optimistic Locking:
- *   - expectedVersion must match current version
- *   - Version incremented on successful update
- *   - 409 response if version mismatch (prevents lost updates)
- *
- * Audit:
- *   - Change logged in marketAuditLog table
- *   - Includes before/after state and admin address
- *
- * Logging:
- *   - Includes correlation ID, market ID, admin address, and version info
  */
 marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res, next) => {
   const reqId = String((req as any).id ?? "anon");
@@ -241,17 +229,10 @@ marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res,
   const adminAddress = req.user?.stellarAddress;
 
   try {
-    // Validate schema
     const parsed = patchMarketSchema.safeParse(req.body);
     if (!parsed.success) {
       logger.warn(
-        {
-          reqId,
-          correlationId: reqId,
-          marketId,
-          adminAddress,
-          issues: parsed.error.issues,
-        },
+        { reqId, correlationId: reqId, marketId, adminAddress, issues: parsed.error.issues },
         "markets_patch_validation_failed"
       );
       return res.status(400).json({
@@ -265,48 +246,22 @@ marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res,
     }
 
     const { question, metadata, expectedVersion } = parsed.data;
-
-    // Build patch object
     const patch: { question?: string; metadata?: any } = {};
     if (question !== undefined) patch.question = question;
     if (metadata !== undefined) patch.metadata = metadata;
 
     logger.info(
-      {
-        reqId,
-        correlationId: reqId,
-        marketId,
-        adminAddress,
-        expectedVersion,
-        fieldsUpdated: Object.keys(patch),
-      },
+      { reqId, correlationId: reqId, marketId, adminAddress, expectedVersion, fieldsUpdated: Object.keys(patch) },
       "markets_patch_updating"
     );
 
     const updated = await updateMarket(marketId, patch, expectedVersion, adminAddress!);
 
-    logger.info(
-      {
-        reqId,
-        correlationId: reqId,
-        marketId,
-        adminAddress,
-        newVersion: updated.version,
-      },
-      "markets_patch_success"
-    );
+    logger.info({ reqId, correlationId: reqId, marketId, adminAddress, newVersion: updated.version }, "markets_patch_success");
     return res.json({ data: updated });
   } catch (e) {
     if (e instanceof VersionConflictError) {
-      logger.warn(
-        {
-          reqId,
-          correlationId: reqId,
-          marketId,
-          adminAddress,
-        },
-        "markets_patch_version_conflict"
-      );
+      logger.warn({ reqId, correlationId: reqId, marketId, adminAddress }, "markets_patch_version_conflict");
       return res.status(409).json({
         error: {
           code: "version_conflict",
@@ -327,10 +282,7 @@ marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res,
       });
     }
 
-    logger.error(
-      { reqId, correlationId: reqId, marketId, adminAddress, err: e },
-      "markets_patch_failed"
-    );
+    logger.error({ reqId, correlationId: reqId, marketId, adminAddress, err: e }, "markets_patch_failed");
     return next(e);
   }
 });

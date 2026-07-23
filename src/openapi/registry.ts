@@ -411,6 +411,46 @@ registry.registerPath({
   },
 });
 
+// ── /api/markets/{id}/prediction-count ───────────────────────────────────────
+
+const PredictionCountResponse = z
+  .object({
+    data: z.object({
+      marketId: z.string(),
+      count: z.number().int().nonnegative(),
+      computedAt: z.string().datetime(),
+      cached: z.boolean(),
+    }),
+  })
+  .openapi("PredictionCountResponse");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/markets/{id}/prediction-count",
+  operationId: "getMarketPredictionCount",
+  tags: ["Markets"],
+  summary: "Get total prediction count for a market",
+  description:
+    "Returns the total number of predictions placed on the given market. " +
+    "Results are cached in Redis for 60 seconds. The `cached` field " +
+    "indicates whether the value came from the cache.",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      description: "Prediction count",
+      content: { "application/json": { schema: PredictionCountResponse } },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    404: {
+      description: "Market not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/leaderboard ─────────────────────────────────────────────────────────
 
 const LeaderboardEntry = z
