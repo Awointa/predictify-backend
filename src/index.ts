@@ -20,12 +20,21 @@ import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
+import { createAdminWebhooksRouter } from "./routes/adminWebhooks";
+import { createAdminDlqRouter } from "./routes/admin/webhooks/dlq";
+import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
+import type { WebhookStore } from "./services/webhookStore";
+import type { WebhookDispatcher } from "./services/webhookDispatcher";
 import { requestContextStorage } from "./lib/requestContext";
 import { REQUEST_ID_HEADER } from "./lib/http";
 import { register } from "./metrics/registry";
 import { connectWithRetry, closeDb, db } from "./db/client";
 import { stopScheduler } from "./services/scheduler";
+import {
+  startIndexerHealthProbe,
+  stopIndexerHealthProbe,
+} from "./jobs/indexerHealthProbe";
 import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
@@ -42,7 +51,18 @@ function sanitizeRequestId(raw: string): string | undefined {
   return sanitized.length > 0 ? sanitized : undefined;
 }
 
-export function createApp(_options?: unknown): express.Express {
+/** Dependency-injection options for `createApp`. */
+export interface CreateAppOptions {
+  /** Webhook store + dispatcher to inject into admin webhook routes.
+   *  When omitted, those routes are not mounted (production wires them via
+   *  `DrizzleWebhookStore` after `connectWithRetry()` resolves). */
+  webhooks?: {
+    store: WebhookStore;
+    dispatcher: WebhookDispatcher;
+  };
+}
+
+export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -106,6 +126,23 @@ export function createApp(_options?: unknown): express.Express {
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
 
+  // Admin webhook routes — mounted only when deps are provided (tests inject an
+  // in-memory store; production wires DrizzleWebhookStore after DB connects).
+  if (options.webhooks) {
+    const { store, dispatcher } = options.webhooks;
+    // Dedicated DLQ list: GET /api/admin/webhooks/dlq
+    // Has Zod validation, structured logging, and rate limiting.
+    app.use(
+      "/api/admin/webhooks/dlq",
+      createAdminDlqRouter({ store }),
+    );
+    // Replay + DLQ list (legacy): POST /api/admin/webhooks/dlq/:id/replay
+    app.use(
+      "/api/admin/webhooks",
+      createAdminWebhooksRouter({ store, dispatcher }),
+    );
+  }
+
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
     if (
@@ -127,6 +164,7 @@ export function createApp(_options?: unknown): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
+  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -145,6 +183,7 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
+      probeHandle = startIndexerHealthProbe();
 
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
@@ -158,7 +197,7 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
-        stopIndexerHealthProbe(probeHandle);
+        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
@@ -167,7 +206,7 @@ if (require.main === module) {
 
       process.on("SIGINT", () => {
         logger.info("SIGINT received, shutting down gracefully");
-        stopIndexerHealthProbe(probeHandle);
+        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         process.exit(0);
       });

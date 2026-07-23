@@ -1138,3 +1138,129 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
+
+  /api/admin/webhooks/dlq:
+    get:
+      summary: List dead-lettered webhook deliveries
+      description: |
+        Returns a paginated, newest-first list of dead-lettered webhook deliveries
+        for operator review. Pagination is keyset-based so listings stay stable
+        while the DLQ is being actively written to or replayed.
+      tags:
+        - Admin Webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Items per page (1–100, default 20). Non-numeric values return 400.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          description: Opaque page token from a previous response. Omit to start from the first page.
+          required: false
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Paginated list of DLQ items
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - nextCursor
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - originalId
+                        - eventId
+                        - eventType
+                        - targetUrl
+                        - payloadBase64
+                        - signature
+                        - attempts
+                        - maxAttempts
+                        - lastError
+                        - failedAt
+                        - replayedAt
+                        - replayDeliveryId
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        originalId:
+                          type: string
+                          format: uuid
+                          description: ID of the original live delivery that was dead-lettered
+                        eventId:
+                          type: string
+                        eventType:
+                          type: string
+                          example: market.resolved
+                        targetUrl:
+                          type: string
+                          format: uri
+                        payloadBase64:
+                          type: string
+                          format: byte
+                          description: Original signed request body, base64-encoded
+                        signature:
+                          type: string
+                          description: HMAC-SHA256 signature over the original payload bytes
+                        headers:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                        attempts:
+                          type: integer
+                        maxAttempts:
+                          type: integer
+                        lastError:
+                          type: string
+                          description: Error message from the final failed attempt
+                        failedAt:
+                          type: string
+                          format: date-time
+                        replayedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        replayDeliveryId:
+                          type: string
+                          format: uuid
+                          nullable: true
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Opaque cursor for the next page; null if this is the last page
+        '400':
+          description: Invalid query parameters (non-numeric limit or empty cursor)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Missing, invalid, or non-admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
