@@ -29,6 +29,12 @@ const EXPECTED_ROUTES: RouteEntry[] = [
   { method: "post", path: "/api/users/{addr}/follow" },
   { method: "delete", path: "/api/users/{addr}/follow" },
   { method: "get", path: "/api/admin/audit" },
+  { method: "get", path: "/api/admin/users/{address}" },
+  { method: "get", path: "/api/admin/feature-flags" },
+  { method: "post", path: "/api/admin/feature-flags" },
+  { method: "get", path: "/api/admin/feature-flags/{key}" },
+  { method: "patch", path: "/api/admin/feature-flags/{key}" },
+  { method: "delete", path: "/api/admin/feature-flags/{key}" },
 ];
 
 function key(route: RouteEntry): string {

@@ -8,6 +8,8 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
   JWT_SECRET: z.string().min(32),
+  JWT_KEYS: z.string().optional(),
+  JWT_ACTIVE_KID: z.string().optional(),
   JWT_ISSUER: z.string().default("predictify"),
   JWT_AUDIENCE: z.string().default("predictify-app"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
