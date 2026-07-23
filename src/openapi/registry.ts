@@ -946,6 +946,50 @@ registry.registerPath({
   },
 });
 
+// ── /api/admin/reindex ─────────────────────────────────────────────────────
+
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/reindex",
+  tags: ["Admin"],
+  summary: "Trigger an indexer reindex from a specific ledger (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            ledger: z.number().int().positive(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Reindex request accepted",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.object({
+              from: z.number().int().positive(),
+              to: z.number().int().positive(),
+            }),
+          }),
+        },
+      },
+    },
+    400: {
+      description: "Invalid request body",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/admin/health/detail ─────────────────────────────────────────────────
 
 const CheckStatus = z

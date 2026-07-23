@@ -49,3 +49,9 @@ export const settleConfirmerFailedTotal = new Counter({
   help: "Total number of claims permanently marked as failed by the settle-confirmer",
   registers: [register],
 });
+
+export const adminReindexTotal = new Counter({
+  name: "admin_reindex_total",
+  help: "Total number of admin-triggered reindex operations that completed successfully",
+  registers: [register],
+});

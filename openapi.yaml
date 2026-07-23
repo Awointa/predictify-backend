@@ -394,7 +394,42 @@ components:
         - id
         - action
         - createdAt
+    AdminReindexRequest:
+      type: object
+      description: >
+        Body for POST /api/admin/reindex. Specifies the ledger sequence number
+        from which reindexing should begin. The upper bound is resolved automatically
+        from the current Soroban RPC chain tip.
+      properties:
+        ledger:
+          type: integer
+          minimum: 1
+          description: >
+            Starting ledger sequence number (inclusive). Must be a positive integer.
+            The indexer will backfill from this ledger to the current chain tip,
+            applying the configured INDEXER_REWIND_LEDGERS overlap for reorg safety.
+      required:
+        - ledger
+    AdminReindexResponse:
+      type: object
+      description: Resolved ledger range for the triggered reindex operation.
+      properties:
+        data:
+          type: object
+          properties:
+            from:
+              type: integer
+              description: The starting ledger supplied in the request body.
+            to:
+              type: integer
+              description: The chain tip resolved at the time the request was processed.
+          required:
+            - from
+            - to
+      required:
+        - data
   parameters: {}
+
 paths:
   /health:
     get:
@@ -1134,6 +1169,65 @@ paths:
                 $ref: '#/components/schemas/ErrorBody'
         '429':
           description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/admin/reindex:
+    post:
+      operationId: adminReindex
+      tags:
+        - Admin
+      summary: Trigger a reindex from a specific ledger (admin only)
+      description: >
+        Resolves the current Soroban chain tip and backfills all on-chain
+        Predictify contract events in the range [ledger, chainTip]. Work is
+        chunked by INDEXER_BACKFILL_CHUNK_SIZE with a INDEXER_REWIND_LEDGERS
+        overlap for reorg-safe deduplication. The operation is idempotent —
+        re-running it for the same range is safe due to ON CONFLICT DO NOTHING
+        upserts. A structured audit-log entry is written on success and the
+        admin_reindex_total Prometheus counter is incremented.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminReindexRequest'
+            example:
+              ledger: 54321
+      responses:
+        '200':
+          description: Reindex triggered successfully. Returns the resolved ledger range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminReindexResponse'
+              example:
+                data:
+                  from: 54321
+                  to: 55000
+        '400':
+          description: Validation error (ledger missing or not a positive integer)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '403':
+          description: Missing or invalid admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Rate limit exceeded (60 req/min per admin token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Internal server error (e.g. Soroban RPC unreachable)
           content:
             application/json:
               schema:
