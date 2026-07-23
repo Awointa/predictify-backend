@@ -57,7 +57,7 @@ export async function listMarkets(
     throw new Error("Unexpected response from database: rows is not an array");
   }
 
-  // @ts-expect-error/test
+  // test
   return rows.map((r) => ({
     ...r,
     resolutionTime:
@@ -75,7 +75,7 @@ export async function listMarkets(
  * @throws Error if database query fails
  */
 
-// @ts-expect-error/test
+// test
 export async function getMarketById(id: string) {
   if (!id || typeof id !== "string") {
     throw new Error("Market ID must be a non-empty string");
