@@ -114,7 +114,10 @@ export function createAdminDbExplainRouter(opts: AdminDbExplainRouterOptions = {
       const pool = getPool();
       const dbResult = await pool.query(sqlText, parsedParams.data);
 
-      const explainPlan = dbResult.rows.map((row: any) => row["QUERY PLAN"] || Object.values(row)[0]);
+      const explainPlan = dbResult.rows.map((row: unknown) => {
+        const r = row as Record<string, unknown>;
+        return String(r["QUERY PLAN"] ?? Object.values(r)[0] ?? "");
+      });
 
       logger.info(
         { reqId: getRequestId(), queryId, actor: req.adminAddress },
