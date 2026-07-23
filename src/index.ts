@@ -6,7 +6,7 @@ import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { metricsMiddleware } from "./metrics/httpMetrics";
 import { idempotency } from "./middleware/idempotency";
-import { defaultBodyLimitMiddleware, webhookBodyLimitMiddleware } from "./middleware/bodyLimit";
+import { defaultBodySizeLimitMiddleware, webhookBodySizeLimitMiddleware } from "./middleware/bodySize";
 import { healthRouter } from "./routes/health";
 import dependenciesRouter from "./routes/healthz/dependencies";
 import { authRouter } from "./routes/auth";
@@ -54,8 +54,6 @@ export function createApp(_options?: unknown): express.Express {
   }
 
   app.use(helmet());
-  app.use("/api/admin/webhooks", webhookBodyLimitMiddleware);
-  app.use(defaultBodyLimitMiddleware);
 
   app.use(
     pinoHttp({
@@ -82,6 +80,9 @@ export function createApp(_options?: unknown): express.Express {
       requestContextStorage.run({ requestId }, next);
     },
   );
+
+  app.use("/api/admin/webhooks", webhookBodySizeLimitMiddleware);
+  app.use(defaultBodySizeLimitMiddleware);
 
   app.use(metricsMiddleware);
   app.use("/health", healthRouter);

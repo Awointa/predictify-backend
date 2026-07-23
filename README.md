@@ -41,7 +41,7 @@ Once running:
 ## Request body size limits
 
 - Default JSON request body limit: `256kb`.
-- Route-level overrides are applied in middleware using `createBodyLimitMiddleware(...)`.
+- Route-level overrides are applied in middleware using `createBodySizeLimitMiddleware(...)` from `src/middleware/bodySize.ts`.
 - Webhook routes may opt into a larger limit of `1mb`.
 - Requests exceeding the configured limit return HTTP `413` with the standard error envelope, including correlation and request IDs.
 
