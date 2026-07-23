@@ -37,6 +37,13 @@ const schema = z.object({
   // ── Settle confirmer ──────────────────────────────────────────
   SETTLE_CONFIRMER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5_000),
   SETTLE_CONFIRMER_CONFIRMATION_LEDGERS: z.coerce.number().int().positive().default(2),
+  // ── Slow Query Alerter ──────────────────────────────────────────
+  SLOW_QUERY_ALERTER_ENABLED: z.coerce.boolean().default(false),
+  SLOW_QUERY_ALERTER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(60000), // 1 minute
+  SLOW_QUERY_ALERTER_MEAN_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(100), // 100ms
+  SLOW_QUERY_ALERTER_MAX_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(500), // 500ms
+  SLOW_QUERY_ALERTER_LIMIT: z.coerce.number().int().positive().default(10),
+  SLOW_QUERY_ALERTER_QUERY_MAX_LENGTH: z.coerce.number().int().positive().default(1000),
 });
 
 export const env = schema.parse(process.env);
