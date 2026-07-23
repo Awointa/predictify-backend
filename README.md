@@ -33,8 +33,8 @@ npm run dev                  # predev hook re-runs check-env automatically
 
 Once running:
 
-- **Swagger UI** → http://localhost:3000/docs *(non-production only; set `ENABLE_DOCS=true` to enable in production)*
-- **OpenAPI JSON** → http://localhost:3000/openapi.json *(always available)*
+- **Swagger UI** → http://localhost:3001/docs *(non-production only; set `ENABLE_DOCS=true` to enable in production)*
+- **OpenAPI JSON** → http://localhost:3001/openapi.json *(always available)*
 - **Audit export** → `GET /api/admin/audit/export` streams admin audit logs as `application/x-ndjson`
 
 
