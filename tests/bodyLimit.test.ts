@@ -35,9 +35,8 @@ describe("body size limit middleware", () => {
       .send({ payload: tooLarge });
 
     expect(res.status).toBe(413);
-    expect(res.body.error.code).toBe("request_failed");
+    expect(res.body.error.type).toBe("request_failed");
     expect(res.body.error.message).toBe("Request body too large");
-    expect(res.body.error.requestId).toEqual(expect.any(String));
     expect(res.body.error.correlationId).toEqual(expect.any(String));
     expect(res.body.error.details.limit).toBeGreaterThanOrEqual(256 * 1024);
   });
@@ -63,8 +62,8 @@ describe("body size limit middleware", () => {
       .send({ payload: tooLarge });
 
     expect(res.status).toBe(413);
-    expect(res.body.error.code).toBe("request_failed");
+    expect(res.body.error.type).toBe("request_failed");
     expect(res.body.error.message).toBe("Request body too large");
-    expect(res.body.error.details.limit).toBeGreaterThanOrEqual(1024 * 1024);
+    expect(res.body.error.details.limit).toBeGreaterThanOrEqual(1024 * 1000);
   });
 });

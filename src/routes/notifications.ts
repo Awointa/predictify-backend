@@ -1,8 +1,6 @@
 import {
   Router,
-  type NextFunction,
   type Request,
-  type Response,
 } from "express";
 import { z } from "zod";
 import { logger } from "../config/logger";
@@ -13,6 +11,7 @@ import {
   notificationChannels,
   patchNotificationPreferences,
 } from "../services/notificationPrefs";
+import { RouteErrorFactory } from "../errors";
 
 const notificationCategorySchema = z.enum(notificationCategories);
 const notificationChannelSchema = z.enum(notificationChannels);
@@ -39,7 +38,7 @@ notificationsRouter.use(requireAuth);
 
 notificationsRouter.get(
   "/preferences",
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req, res, next) => {
     try {
       const userId = (req as Request & { user: { id: string } }).user.id;
       const preferences = await getNotificationPreferences(userId);
@@ -66,7 +65,7 @@ notificationsRouter.get(
 
 notificationsRouter.patch(
   "/preferences",
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req, res, next) => {
     const parsed = patchPreferencesBodySchema.safeParse(req.body);
     if (!parsed.success) {
       logger.warn(
@@ -76,13 +75,7 @@ notificationsRouter.patch(
         },
         "notification_preferences_validation_failed",
       );
-
-      return res.status(400).json({
-        error: {
-          code: "validation_error",
-          details: parsed.error.issues,
-        },
-      });
+      throw RouteErrorFactory.validation("Invalid request body");
     }
 
     try {

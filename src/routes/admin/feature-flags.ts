@@ -1,17 +1,3 @@
-/**
- * Admin feature-flag CRUD router.
- *
- *   GET    /api/admin/feature-flags        — list all flags
- *   POST   /api/admin/feature-flags        — create a flag
- *   GET    /api/admin/feature-flags/:key   — read one flag
- *   PATCH  /api/admin/feature-flags/:key   — update enabled/description
- *   DELETE /api/admin/feature-flags/:key   — remove a flag
- *
- * Every route requires a valid admin JWT (role: "admin"). Requests are
- * rate-limited per admin token. Input is validated at the boundary with zod and
- * all failures return the standard error envelope.
- */
-
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
@@ -27,9 +13,9 @@ import {
   FeatureFlagConflictError,
   FeatureFlagNotFoundError,
 } from "../../services/featureFlagService";
+import { RouteErrorFactory } from "../../errors";
 
 export interface AdminFeatureFlagsRouterOptions {
-  /** Requests per minute per admin token. Default: 60 */
   rateLimitPerMinute?: number;
 }
 
@@ -57,20 +43,10 @@ const updateSchema = z
     message: "at least one of enabled or description is required",
   });
 
-function validationError(res: import("express").Response, message: string): void {
-  res.status(400).json({
-    error: { code: "validation_error", message, requestId: getRequestId() },
-  });
-}
-
-/**
- * Maps the service's typed domain errors to the standard error envelope.
- * Returns true when the error was handled so callers can short-circuit.
- */
 function handleFlagError(res: import("express").Response, e: unknown): boolean {
   if (e instanceof FeatureFlagConflictError || e instanceof FeatureFlagNotFoundError) {
     res.status(e.status).json({
-      error: { code: e.code, message: e.message, requestId: getRequestId() },
+      error: { type: e.code, message: e.message, correlationId: "" },
     });
     return true;
   }
@@ -104,7 +80,7 @@ export function createAdminFeatureFlagsRouter(
   router.post("/", (req, res, next) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
-      return validationError(res, parsed.error.issues[0]?.message ?? "invalid body");
+      throw RouteErrorFactory.validation(parsed.error.issues[0]?.message ?? "invalid body");
     }
     try {
       const flag = createFeatureFlag(parsed.data);
@@ -119,7 +95,7 @@ export function createAdminFeatureFlagsRouter(
   router.get("/:key", (req, res, next) => {
     const key = flagKeySchema.safeParse(req.params.key);
     if (!key.success) {
-      return validationError(res, "invalid feature flag key");
+      throw RouteErrorFactory.validation("invalid feature flag key");
     }
     try {
       return res.json({ data: getFeatureFlag(key.data) });
@@ -132,11 +108,11 @@ export function createAdminFeatureFlagsRouter(
   router.patch("/:key", (req, res, next) => {
     const key = flagKeySchema.safeParse(req.params.key);
     if (!key.success) {
-      return validationError(res, "invalid feature flag key");
+      throw RouteErrorFactory.validation("invalid feature flag key");
     }
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return validationError(res, parsed.error.issues[0]?.message ?? "invalid body");
+      throw RouteErrorFactory.validation(parsed.error.issues[0]?.message ?? "invalid body");
     }
     try {
       const flag = updateFeatureFlag(key.data, parsed.data);
@@ -151,7 +127,7 @@ export function createAdminFeatureFlagsRouter(
   router.delete("/:key", (req, res, next) => {
     const key = flagKeySchema.safeParse(req.params.key);
     if (!key.success) {
-      return validationError(res, "invalid feature flag key");
+      throw RouteErrorFactory.validation("invalid feature flag key");
     }
     try {
       deleteFeatureFlag(key.data);

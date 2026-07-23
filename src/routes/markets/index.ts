@@ -1,6 +1,3 @@
-  
-  
-/* eslint-disable @typescript-eslint/no-explicit-any */ 
 import { Router } from "express";
 import { listMarkets, listUpcomingMarkets, getMarketById, updateMarket, VersionConflictError } from "../services/marketService";
 import { searchMarkets } from "../repositories/marketRepository";
@@ -9,7 +6,7 @@ import { rateLimitAnon } from "../middleware/rateLimitAnon";
 import { listFeaturedMarkets } from "../services/marketFeatureService";
 import { z } from "zod";
 import { logger } from "../../config/logger";
-import { recommendationsRouter } from "./recommendations";
+import { RouteErrorFactory } from "../../errors";
 
 export const marketsRouter = Router();
 
@@ -19,7 +16,6 @@ marketsRouter.use("/:id/disputes", disputesRouter);
 marketsRouter.use(rateLimitAnon);
 marketsRouter.use("/trending", trendingRouter);
 
-// Per-market audit log: GET /api/markets/:id/audit (#216)
 marketsRouter.use("/:id/audit", marketAuditRouter);
 
 const patchMarketSchema = z.object({
@@ -33,15 +29,7 @@ marketsRouter.get("/search", async (req, res, next) => {
   try {
     const q = req.query.q as string;
     if (typeof q !== "string" || !q.trim()) {
-      logger.warn({ reqId, correlationId: reqId, query: req.query }, "markets_search_validation_failed");
-      return res.status(400).json({
-        error: {
-          code: "validation_error",
-          message: "Search query parameter 'q' is required",
-          correlationId: reqId,
-          requestId: reqId,
-        },
-      });
+      throw RouteErrorFactory.badRequest("Search query parameter 'q' is required");
     }
 
     const limit = parseInt(req.query.limit as string) || 20;
@@ -80,36 +68,11 @@ marketsRouter.get("/search", async (req, res, next) => {
   }
 });
 
-/**
- * GET /api/markets - List active markets with pagination
- *
- * Query Parameters:
- *   - limit: number (1-100, default: 20) - max results per page
- *   - offset: number (default: 0) - pagination offset
- *   - page: number (default: 1) - alternative to offset
- *
- * Validation:
- *   - Returns 400 if limit > 100 or is NaN
- *
- * Logging:
- *   - Includes correlation ID from request context
- *   - Logs validation failures and errors with full context
- */
 marketsRouter.get("/", async (req, res, next) => {
   const reqId = String((req as any).id ?? "anon");
   try {
     if (req.query.limit !== undefined && (isNaN(Number(req.query.limit)) || Number(req.query.limit) > 100)) {
-      logger.warn(
-        { reqId, correlationId: reqId, limit: req.query.limit },
-        "markets_list_invalid_limit"
-      );
-      return res.status(400).json({
-        error: {
-          code: "invalid_query",
-          message: "Limit must be a number between 1 and 100",
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.validation("Limit must be a number between 1 and 100");
     }
 
     logger.debug({ reqId, correlationId: reqId, limit: req.query.limit }, "markets_list_fetching");
@@ -123,8 +86,6 @@ marketsRouter.get("/", async (req, res, next) => {
   }
 });
 
-// Public: curated home-page list. Served ahead of `/:id` so the literal
-// path is matched first.
 marketsRouter.get("/featured", async (req, res, next) => {
   try {
     const rawLimit = req.query.limit;
@@ -132,9 +93,7 @@ marketsRouter.get("/featured", async (req, res, next) => {
     if (rawLimit !== undefined) {
       const num = Number(rawLimit);
       if (!Number.isFinite(num) || num < 1 || num > 20) {
-        return res.status(400).json({
-          error: { code: "invalid_query", message: "limit must be an integer between 1 and 20" },
-        });
+        throw RouteErrorFactory.validation("limit must be an integer between 1 and 20");
       }
       parsedLimit = Math.floor(num);
     }
@@ -152,9 +111,7 @@ marketsRouter.get("/upcoming", async (req, res, next) => {
       req.query.limit !== undefined &&
       (isNaN(Number(req.query.limit)) || Number(req.query.limit) < 1 || Number(req.query.limit) > 100)
     ) {
-      return res.status(400).json({
-        error: { code: "validation_error", message: "limit must be between 1 and 100", requestId: reqId },
-      });
+      throw RouteErrorFactory.validation("limit must be between 1 and 100");
     }
     const limit = req.query.limit !== undefined ? Number(req.query.limit) : 50;
     const data = await listUpcomingMarkets({ limit });
@@ -172,28 +129,14 @@ marketsRouter.get("/:id", async (req, res, next) => {
 
   try {
     if (!marketId || typeof marketId !== "string") {
-      logger.warn({ reqId, correlationId: reqId, marketId }, "markets_get_invalid_id");
-      return res.status(400).json({
-        error: {
-          code: "invalid_request",
-          message: "Market ID is required and must be a string",
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.badRequest("Market ID is required and must be a string");
     }
 
     logger.debug({ reqId, correlationId: reqId, marketId }, "markets_get_fetching");
     const market = await getMarketById(marketId);
 
     if (!market) {
-      logger.warn({ reqId, correlationId: reqId, marketId }, "markets_get_not_found");
-      return res.status(404).json({
-        error: {
-          code: "not_found",
-          message: `Market with ID ${marketId} not found`,
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.notFound(`Market with ID ${marketId} not found`);
     }
 
     logger.info({ reqId, correlationId: reqId, marketId }, "markets_get_success");
@@ -204,69 +147,19 @@ marketsRouter.get("/:id", async (req, res, next) => {
   }
 });
 
-/**
- * PATCH /api/markets/:id - Update a market (admin only)
- *
- * Authorization:
- *   - Requires admin role via requireAdmin middleware
- *
- * Request Body:
- *   - question?: string - new question text
- *   - metadata?: any - custom metadata object
- *   - expectedVersion: number - current version for optimistic locking
- *
- * Responses:
- *   - 200: Updated market object
- *   - 400: Validation error
- *   - 401: Unauthorized
- *   - 404: Market not found
- *   - 409: Version conflict (stale update)
- *   - 500: Database error
- *
- * Optimistic Locking:
- *   - expectedVersion must match current version
- *   - Version incremented on successful update
- *   - 409 response if version mismatch (prevents lost updates)
- *
- * Audit:
- *   - Change logged in marketAuditLog table
- *   - Includes before/after state and admin address
- *
- * Logging:
- *   - Includes correlation ID, market ID, admin address, and version info
- */
 marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res, next) => {
   const reqId = String((req as any).id ?? "anon");
   const marketId = req.params.id as string;
   const adminAddress = req.user?.stellarAddress;
 
   try {
-    // Validate schema
     const parsed = patchMarketSchema.safeParse(req.body);
     if (!parsed.success) {
-      logger.warn(
-        {
-          reqId,
-          correlationId: reqId,
-          marketId,
-          adminAddress,
-          issues: parsed.error.issues,
-        },
-        "markets_patch_validation_failed"
-      );
-      return res.status(400).json({
-        error: {
-          code: "validation_error",
-          message: "Invalid request body",
-          details: parsed.error.issues,
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.validation("Invalid request body");
     }
 
     const { question, metadata, expectedVersion } = parsed.data;
 
-    // Build patch object
     const patch: { question?: string; metadata?: any } = {};
     if (question !== undefined) patch.question = question;
     if (metadata !== undefined) patch.metadata = metadata;
@@ -307,24 +200,12 @@ marketsRouter.patch("/:id", requireAdmin, async (req: AuthenticatedRequest, res,
         },
         "markets_patch_version_conflict"
       );
-      return res.status(409).json({
-        error: {
-          code: "version_conflict",
-          message: "Market has been modified by another request. Please refresh and try again.",
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.conflict("Market has been modified by another request. Please refresh and try again.");
     }
 
     if ((e as any).status === 404) {
       logger.warn({ reqId, correlationId: reqId, marketId, adminAddress }, "markets_patch_not_found");
-      return res.status(404).json({
-        error: {
-          code: "not_found",
-          message: `Market with ID ${marketId} not found`,
-          correlationId: reqId,
-        },
-      });
+      throw RouteErrorFactory.notFound(`Market with ID ${marketId} not found`);
     }
 
     logger.error(
