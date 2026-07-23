@@ -465,8 +465,7 @@ export async function runFraudScan(
 export class DrizzleFraudRepo implements FraudRepo {
   // Use `any` to remain compatible with the codebase's drizzle helper typing
   // (other services here do the same — see DrizzleMarketResolutionRepo).
-  // @ts-expect-error/test
-  constructor(private readonly db: any = defaultDb) {}
+  constructor(private readonly db = defaultDb) {}
 
   async loadRecentPredictions(opts: {
     since: Date;

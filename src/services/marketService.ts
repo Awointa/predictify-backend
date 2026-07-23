@@ -1,7 +1,7 @@
 import { invalidateMarketCache } from "../cache/marketsCache";
 import { db, getDb } from "../db/client";
 import { markets, marketAuditLog } from "../db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { emitMarketEvent, LogEvent } from "../logging/events";
 
 export interface Market {
@@ -34,10 +34,9 @@ export class VersionConflictError extends Error {
  * @throws Error if database query fails
  */
 
-// @ts-expect-error/test
 export async function listMarkets(
   options: { limit?: number; offset?: number } = {},
-): Promise<any[]> {
+) {
   const limit = options.limit ?? 50;
   const offset = options.offset ?? 0;
 
@@ -59,7 +58,7 @@ export async function listMarkets(
   }
 
   // @ts-expect-error/test
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     ...r,
     resolutionTime:
       r.resolutionTime instanceof Date
@@ -77,7 +76,7 @@ export async function listMarkets(
  */
 
 // @ts-expect-error/test
-export async function getMarketById(id: string): Promise<any | null> {
+export async function getMarketById(id: string) {
   if (!id || typeof id !== "string") {
     throw new Error("Market ID must be a non-empty string");
   }
