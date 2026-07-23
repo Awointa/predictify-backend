@@ -16,6 +16,8 @@ import { usersRouter } from "./routes/users";
 import { userPortfolioRouter } from "./routes/users/portfolio";
 import { leaderboardRouter } from "./routes/leaderboard";
 import { createDocsRouter } from "./routes/docs";
+import { devicesRouter } from "./routes/devices";
+import { sessionsRouter } from "./routes/me/sessions";
 import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
@@ -103,6 +105,7 @@ export function createApp(_options?: unknown): express.Express {
   app.use("/api/users", userPortfolioRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/me/devices", devicesRouter);
+  app.use("/api/me/sessions", sessionsRouter);
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
 
