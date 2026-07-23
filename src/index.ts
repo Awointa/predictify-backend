@@ -30,6 +30,8 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
+import { devicesRouter } from "./routes/devices";
+import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
 
@@ -44,6 +46,12 @@ function sanitizeRequestId(raw: string): string | undefined {
 
 export function createApp(_options?: unknown): express.Express {
   const app = express();
+
+  // Disable Express's built-in ETag generation — we manage strong ETags
+  // explicitly in src/middleware/etag.ts for the resources that need them.
+  // Leaving Express's weak ETags enabled would add spurious `W/"..."` headers
+  // on every JSON response, including error envelopes.
+  app.set("etag", false);
 
   if (env.TRUST_PROXY) {
     app.set("trust proxy", true);
@@ -127,6 +135,7 @@ export function createApp(_options?: unknown): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
+  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -145,6 +154,7 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
+      probeHandle = startIndexerHealthProbe();
 
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
@@ -158,7 +168,7 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
-        stopIndexerHealthProbe(probeHandle);
+        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
@@ -167,7 +177,7 @@ if (require.main === module) {
 
       process.on("SIGINT", () => {
         logger.info("SIGINT received, shutting down gracefully");
-        stopIndexerHealthProbe(probeHandle);
+        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         process.exit(0);
       });
