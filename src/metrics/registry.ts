@@ -49,3 +49,22 @@ export const settleConfirmerFailedTotal = new Counter({
   help: "Total number of claims permanently marked as failed by the settle-confirmer",
   registers: [register],
 });
+
+export const signupAnomalyScansTotal = new Counter({
+  name: "signup_anomaly_scans_total",
+  help: "Total number of signup-rate anomaly scans completed",
+  registers: [register],
+});
+
+export const signupAnomaliesDetectedTotal = new Counter({
+  name: "signup_anomalies_detected_total",
+  help: "Total number of anomalous signup buckets detected, segmented by severity (warning, critical)",
+  labelNames: ["severity"] as const,
+  registers: [register],
+});
+
+export const signupAnomalyTopScore = new Gauge({
+  name: "signup_anomaly_top_score",
+  help: "Highest modified z-score observed in the most recent signup-rate anomaly scan",
+  registers: [register],
+});
