@@ -11,6 +11,8 @@ import { apiVersionMiddleware } from "./middleware/apiVersion";
 import { defaultBodyLimitMiddleware, webhookBodyLimitMiddleware } from "./middleware/bodyLimit";
 import { healthRouter } from "./routes/health";
 import dependenciesRouter from "./routes/healthz/dependencies";
+import { createReadyRouter } from "./routes/health/ready";
+import { redisConnection } from "./queue";
 import { authRouter } from "./routes/auth";
 import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
@@ -23,8 +25,8 @@ import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
 import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
+import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
-import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 import { requestContextStorage } from "./lib/requestContext";
 import { REQUEST_ID_HEADER } from "./lib/http";
 import { register } from "./metrics/registry";
@@ -51,7 +53,7 @@ export interface AppDeps {
   webhooks?: any;
 }
 
-export function createApp(deps: AppDeps = {}): express.Express {
+export function createApp(_deps: AppDeps = {}): express.Express {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -96,6 +98,7 @@ export function createApp(deps: AppDeps = {}): express.Express {
   app.use(metricsMiddleware);
   app.use("/health", healthRouter);
   app.use("/healthz/dependencies", dependenciesRouter);
+  app.use("/api/health/ready", createReadyRouter({ db, redis: redisConnection }));
 
   const mutationMethods = ["POST", "PATCH"] as const;
   app.use("/api", (req, res, next) =>
@@ -138,7 +141,6 @@ export function createApp(deps: AppDeps = {}): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
-  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -172,7 +174,6 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
@@ -181,7 +182,6 @@ if (require.main === module) {
 
       process.on("SIGINT", () => {
         logger.info("SIGINT received, shutting down gracefully");
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         process.exit(0);
       });
