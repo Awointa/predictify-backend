@@ -89,6 +89,41 @@ registry.registerPath({
   },
 });
 
+// ── /api/users/health ────────────────────────────────────────────────────
+
+const UsersHealthResponse = z
+  .object({
+    status: z.enum(["ok", "down"]),
+    correlationId: z.string(),
+    checkedAt: z.string().datetime(),
+    dependencies: z.object({
+      database: z.object({
+        status: z.enum(["ok", "down"]),
+        latencyMs: z.number(),
+        error: z.string().optional(),
+      }),
+    }),
+  })
+  .openapi("UsersHealthResponse");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/users/health",
+  operationId: "usersHealth",
+  tags: ["Health"],
+  summary: "User-facing dependency health probe",
+  responses: {
+    200: {
+      description: "User service dependencies are healthy",
+      content: { "application/json": { schema: UsersHealthResponse } },
+    },
+    503: {
+      description: "User service dependency probe failed",
+      content: { "application/json": { schema: UsersHealthResponse } },
+    },
+  },
+});
+
 // ── /metrics ─────────────────────────────────────────────────────────────────
 
 registry.registerPath({
