@@ -47,7 +47,7 @@ export function errorHandler(
 
   // 2. AppError (legacy)
   if (err instanceof AppError) {
-    logger.error({ err, path: req.path, method: req.method, requestId: reqId }, "app_error");
+    logger.error({ err, path: req.path, method: req.method, correlationId, requestId: reqId }, "app_error");
     res.status(err.status).json({
       error: {
         code: err.code,
@@ -62,7 +62,7 @@ export function errorHandler(
 
   // 3. ZodError
   if (err instanceof ZodError) {
-    logger.warn({ err, path: req.path, method: req.method, requestId: reqId }, "validation_error");
+    logger.warn({ err, path: req.path, method: req.method, correlationId, requestId: reqId }, "validation_error");
     res.status(400).json({
       error: {
         code: ErrorCodes.VALIDATION_ERROR,
@@ -91,7 +91,7 @@ export function errorHandler(
   }
 
   // 4. Unknown error
-  logger.error({ err, path: req.path, method: req.method, requestId: reqId }, "unknown_error");
+  logger.error({ err, path: req.path, method: req.method, correlationId, requestId: reqId }, "unknown_error");
   res.status(500).json({
     error: {
       code: ErrorCodes.INTERNAL_ERROR,

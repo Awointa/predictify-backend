@@ -1,11 +1,11 @@
 import request from "supertest";
 import express from "express";
-import { createBodyLimitMiddleware, DEFAULT_BODY_LIMIT, WEBHOOK_BODY_LIMIT } from "../src/middleware/bodyLimit";
+import { createBodySizeLimitMiddleware, DEFAULT_BODY_LIMIT, WEBHOOK_BODY_LIMIT } from "../src/middleware/bodySize";
 import { errorHandler } from "../src/middleware/errorHandler";
 
 function buildApp(path: string, limit?: string) {
   const app = express();
-  app.use(path, createBodyLimitMiddleware(limit ? { limit } : undefined));
+  app.use(path, createBodySizeLimitMiddleware(limit ? { limit } : undefined));
   app.post(path, (req, res) => {
     res.status(200).json({ ok: true, size: JSON.stringify(req.body).length });
   });
