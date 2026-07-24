@@ -348,6 +348,26 @@ export const auditLogs = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Plugins (admin-managed CRUD)
+// ---------------------------------------------------------------------------
+
+export const plugins = pgTable("plugins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  enabled: boolean("enabled").notNull().default(true),
+  config: jsonb("config").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Plugin = typeof plugins.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // Feature Flags
 // ---------------------------------------------------------------------------
 export const featureFlags = pgTable("feature_flags", {

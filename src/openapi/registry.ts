@@ -1056,45 +1056,231 @@ registry.registerPath({
   },
 });
 
-// ── /api/admin/reindex ─────────────────────────────────────────────────────
+// ── /api/admin/plugins ─────────────────────────────────────────────────────
 
+const PluginView = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    enabled: z.boolean(),
+    config: z.any(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("PluginView");
+
+const CreatePluginRequest = z
+  .object({
+    name: z.string().min(1).max(255),
+    description: z.string().max(1000).optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.unknown()).optional(),
+  })
+  .openapi("CreatePluginRequest");
+
+const UpdatePluginRequest = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().max(1000).nullable().optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.unknown()).optional(),
+  })
+  .openapi("UpdatePluginRequest");
+
+const DeletePluginResult = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+  })
+  .openapi("DeletePluginResult");
+
+// GET /api/admin/plugins
 registry.registerPath({
-  method: "post",
-  path: "/api/admin/reindex",
+  method: "get",
+  path: "/api/admin/plugins",
+  operationId: "listAdminPlugins",
   tags: ["Admin"],
-  summary: "Trigger an indexer reindex from a specific ledger (admin only)",
+  summary: "List all plugins (admin only)",
   security: [{ bearerAuth: [] }],
   request: {
-    body: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            ledger: z.number().int().positive(),
-          }),
-        },
-      },
-    },
+    query: z.object({
+      enabled: z.enum(["true", "false"]).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      offset: z.coerce.number().int().nonnegative().optional(),
+    }),
   },
   responses: {
     200: {
-      description: "Reindex request accepted",
+      description: "Paginated list of plugins",
       content: {
         "application/json": {
           schema: z.object({
-            data: z.object({
-              from: z.number().int().positive(),
-              to: z.number().int().positive(),
-            }),
+            data: z.array(PluginView),
+            total: z.number().int(),
           }),
         },
       },
     },
     400: {
-      description: "Invalid request body",
+      description: "Validation error",
       content: { "application/json": { schema: ValidationErrorBody } },
     },
     403: {
       description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// POST /api/admin/plugins
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/plugins",
+  operationId: "createAdminPlugin",
+  tags: ["Admin"],
+  summary: "Create a new plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: CreatePluginRequest } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Plugin created",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    409: {
+      description: "Plugin name already exists",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// GET /api/admin/plugins/{id}
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/plugins/{id}",
+  operationId: "getAdminPlugin",
+  tags: ["Admin"],
+  summary: "Get a single plugin by ID (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: {
+      description: "Plugin details",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Invalid ID",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// PATCH /api/admin/plugins/{id}
+registry.registerPath({
+  method: "patch",
+  path: "/api/admin/plugins/{id}",
+  operationId: "updateAdminPlugin",
+  tags: ["Admin"],
+  summary: "Update a plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: { "application/json": { schema: UpdatePluginRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Plugin updated",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// DELETE /api/admin/plugins/{id}
+registry.registerPath({
+  method: "delete",
+  path: "/api/admin/plugins/{id}",
+  operationId: "deleteAdminPlugin",
+  tags: ["Admin"],
+  summary: "Delete a plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: {
+      description: "Plugin deleted",
+      content: {
+        "application/json": { schema: z.object({ data: DeletePluginResult }) },
+      },
+    },
+    400: {
+      description: "Invalid ID",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
       content: { "application/json": { schema: ErrorBody } },
     },
   },
