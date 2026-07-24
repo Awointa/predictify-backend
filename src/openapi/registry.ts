@@ -1077,6 +1077,49 @@ registry.registerPath({
   },
 });
 
+// ── /api/admin/rate-limit/inspect/:address ─────────────────────────────────
+
+const AdminRateLimitInspect = z
+  .object({
+    address: z.string().describe("Target Stellar address"),
+    limit: z.number().int().describe("Configured request cap in the window"),
+    used: z.number().int().describe("Requests currently active in the window"),
+    remaining: z.number().int().describe("Requests remaining in the current window"),
+    windowMs: z.number().int().describe("Sliding-window length in milliseconds"),
+    resetAt: z.string().datetime().describe("ISO-8601 timestamp when the window resets"),
+  })
+  .openapi("AdminRateLimitInspect");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/rate-limit/inspect/{address}",
+  operationId: "inspectAdminRateLimit",
+  tags: ["Admin"],
+  summary: "Inspect current rate-limit state for an address (admin only)",
+  description:
+    "Returns the current sliding-window rate-limit usage for a target Stellar address. " +
+    "Admin-only and read-only.",
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Current rate-limit state for the requested address",
+      content: { "application/json": { schema: z.object({ data: AdminRateLimitInspect }) } },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/admin/health/detail ─────────────────────────────────────────────────
 
 const CheckStatus = z

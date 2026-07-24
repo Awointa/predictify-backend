@@ -36,6 +36,7 @@ import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
 import { rateLimitStatusRouter } from "./routes/rate-limit/status";
+import { adminRateLimitInspectRouter } from "./routes/admin/rate-limit/inspect";
 import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
@@ -120,6 +121,7 @@ export function createApp(deps: AppDeps = {}): express.Express {
   app.use("/api/admin/markets", adminMarketsRouter);
   app.use("/api/admin/db/explain", adminDbExplainRouter);
   app.use("/api/admin/schema-versions", adminSchemaVersionsRouter);
+  app.use("/api/admin/rate-limit", adminRateLimitInspectRouter);
 
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
