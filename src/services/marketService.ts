@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { invalidateMarketCache } from "../cache/marketsCache";
 import { db, getDb } from "../db/client";
-import { markets, marketAuditLog, predictions } from "../db/schema";
-import { asc, eq, and, notInArray, desc, sql, inArray, gt } from "drizzle-orm";
+import { markets, marketAuditLog } from "../db/schema";
+import { and, asc, eq } from "drizzle-orm";
 import { emitMarketEvent, LogEvent } from "../logging/events";
 
 export interface Market {
@@ -311,66 +311,37 @@ export async function updateMarket(
   return result;
 }
 
-export class MarketAlreadyDisabledError extends Error {
-  status = 409;
-  code = "already_disabled";
-  constructor() {
-    super("Market already disabled");
-    Object.setPrototypeOf(this, MarketAlreadyDisabledError.prototype);
-  }
-}
-
 /**
- * Disable a market for editorial moderation (#213).
+ * Lists upcoming markets (status = 'upcoming') with an optional limit.
  *
- * Sets `status = "disabled"` and records a structured audit entry. Idempotency
- * is enforced at the row level: a market that is already disabled yields a 409
- * rather than a duplicate audit entry. Returns the updated market row.
+ * @param options.limit - Max results to return (default: 50, max: 100)
+ * @returns Array of upcoming markets ordered by resolution time ascending
  */
-export async function disableMarket(
-  id: string,
-  reason: string,
-  adminAddress: string,
-): Promise<any> {
-  const result = await db.transaction(async (tx) => {
-    const existing = await tx.select().from(markets).where(eq(markets.id, id)).limit(1);
-    if (existing.length === 0) {
-      const err = new Error("Market not found");
-      (err as any).status = 404;
-      throw err;
-    }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function listUpcomingMarkets(
+  options: { limit?: number } = {},
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any[]> {
+  const limit = Math.min(options.limit ?? 50, 100);
 
-    const current = existing[0];
-    if (current.status === "disabled") {
-      throw new MarketAlreadyDisabledError();
-    }
+  const rows = await getDb()
+    .select({
+      id: markets.id,
+      question: markets.question,
+      status: markets.status,
+      resolutionTime: markets.resolutionTime,
+    })
+    .from(markets)
+    .where(and(eq(markets.status, "upcoming"), eq(markets.archived, false)))
+    .orderBy(asc(markets.resolutionTime))
+    .limit(limit);
 
-    const updated = await tx
-      .update(markets)
-      .set({ status: "disabled", version: current.version + 1 })
-      .where(eq(markets.id, id))
-      .returning();
-
-    await tx.insert(marketAuditLog).values({
-      marketId: id,
-      adminAddress,
-      action: "disable",
-      beforeState: { status: current.status, version: current.version },
-      afterState: { status: "disabled", version: updated[0].version, reason },
-    });
-
-    // Invalidate related cache entries
-    await invalidateMarketCache(id);
-    return updated[0];
-  });
-
-  emitMarketEvent(LogEvent.MARKET_UPDATED, {
-    marketId: id,
-    actor: adminAddress,
-    version: result.version,
-    fieldsUpdated: ["status"],
-  });
-
-  return result;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return rows.map((r: any) => ({
+    ...r,
+    resolutionTime:
+      r.resolutionTime instanceof Date
+        ? r.resolutionTime.toISOString()
+        : r.resolutionTime,
+  }));
 }
-

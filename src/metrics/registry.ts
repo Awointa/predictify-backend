@@ -50,8 +50,8 @@ export const settleConfirmerFailedTotal = new Counter({
   registers: [register],
 });
 
-export const adminReindexTotal = new Counter({
-  name: "admin_reindex_total",
-  help: "Total number of admin-triggered reindex operations that completed successfully",
+export const indexerLagLedgers = new Gauge({
+  name: "indexer_lag_ledgers",
+  help: "Current lag between the chain tip and the last indexed ledger",
   registers: [register],
 });
