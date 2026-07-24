@@ -22,6 +22,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
+import { adminDbExplainRouter } from "./routes/admin/db/explain";
 import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
 import { errorHandler } from "./middleware/errorHandler";
 import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
@@ -115,6 +116,7 @@ export function createApp(deps: AppDeps = {}): express.Express {
   app.use("/api/me/devices", devicesRouter);
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
+  app.use("/api/admin/db/explain", adminDbExplainRouter);
   app.use("/api/admin/schema-versions", adminSchemaVersionsRouter);
 
   app.get("/metrics", async (req, res) => {

@@ -450,6 +450,37 @@ components:
         - id
         - action
         - createdAt
+    ExplainResponseBody:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            queryId:
+              type: string
+            explainPlan:
+              type: array
+              items:
+                type: string
+          required:
+            - queryId
+            - explainPlan
+      required:
+        - data
+    ExplainRequestBody:
+      type: object
+      properties:
+        queryId:
+          type: string
+          description: Allowlisted query ID
+        params:
+          type: array
+          items:
+            nullable: true
+          default: []
+          description: Query parameters
+      required:
+        - queryId
     CheckStatus:
       type: string
       enum:
@@ -1494,6 +1525,49 @@ paths:
             application/x-ndjson:
               schema:
                 type: string
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/admin/db/explain:
+    post:
+      tags:
+        - Admin
+      summary: Execute EXPLAIN ANALYZE on allowlisted queries
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExplainRequestBody'
+      responses:
+        '200':
+          description: Explain plan generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplainResponseBody'
         '400':
           description: Validation error
           content:
