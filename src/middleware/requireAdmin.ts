@@ -18,7 +18,6 @@ import { logger } from "../config/logger";
 // Augment Express Request so downstream handlers can read the admin identity
 // without casting.
 declare global {
-   
   namespace Express {
     interface Request {
       adminAddress?: string;
