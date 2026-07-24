@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import express from "express";
+import { featureFlagsRouter } from './featureFlags';
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { v4 as uuidv4 } from "uuid";
@@ -140,6 +141,7 @@ export function createApp(_deps: AppDeps = {}): express.Express {
   app.use("/api/me/sessions", sessionsRouter);
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/users", adminUsersRouter);
+  app.use('/feature-flags', featureFlagsRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
   app.use("/api/admin/db/explain", adminDbExplainRouter);
   app.use("/api/admin/schema-versions", adminSchemaVersionsRouter);
