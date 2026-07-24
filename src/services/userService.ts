@@ -1,7 +1,8 @@
 import { db } from "../db/client";
 import { users, predictions, markets } from "../db/schema";
-import { and, eq, desc, lt, count } from "drizzle-orm";
+import { and, eq, desc, lt, or, count } from "drizzle-orm";
 import { Result, ok, err } from "../errors/RouteError";
+import { encodeCursor, decodeCursor, Page } from "../utils/cursor";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -100,29 +101,77 @@ export async function getUserByAddress(address: string) {
   });
 }
 
+/**
+ * Serialised shape of a single prediction row returned to callers.
+ */
+export interface UserPredictionRow {
+  id: string;
+  marketId: string;
+  question: string;
+  outcome: string;
+  amount: string;
+  status: string;
+  createdAt: string;
+  resolutionTime: string;
+}
+
+/**
+ * Fetch one page of predictions for a user using keyset (cursor) pagination.
+ *
+ * Sort order: (createdAt DESC, id DESC) — stable even when two predictions
+ * share the same timestamp because the UUID tie-breaker is unique.
+ *
+ * Cursor format: the shared `encodeCursor` / `decodeCursor` helpers in
+ * `src/utils/cursor.ts` encode `{ sortValue: createdAt ISO-string, id }` as a
+ * versioned, opaque base64url token.  A cursor minted under a different schema
+ * version is silently treated as absent (restart from page one) rather than
+ * causing a wrong-offset query or a 500.
+ *
+ * Keyset WHERE clause for DESC ordering:
+ *   (createdAt < cursorTime) OR (createdAt = cursorTime AND id < cursorId)
+ *
+ * This is the standard two-column keyset predicate: rows that sort strictly
+ * after the last item on the previous page, respecting both columns of the
+ * composite sort key.
+ */
 export async function getUserPredictions(
   userId: string,
   opts: {
     status?: string;
     limit: number;
     cursor?: string;
-  }
-) {
+  },
+): Promise<Page<UserPredictionRow>> {
   const { status, limit, cursor } = opts;
 
-  const whereConditions = [eq(predictions.userId, userId)];
+  // Base conditions — always scope to this user.
+  const baseConditions = [eq(predictions.userId, userId)];
 
   if (status) {
-    whereConditions.push(eq(predictions.status, status));
+    baseConditions.push(eq(predictions.status, status));
   }
 
-  if (cursor) {
-    const [cursorTime] = cursor.split("|");
-    if (cursorTime) {
-      whereConditions.push(lt(predictions.createdAt, new Date(cursorTime)));
-    }
+  // Decode the opaque cursor.  An invalid or version-mismatched token is
+  // treated as absent so a tampered ?cursor= value never causes a 500.
+  const cursorKey = decodeCursor(cursor);
+
+  if (cursorKey) {
+    const cursorTime = new Date(cursorKey.sortValue);
+    // Standard two-column keyset predicate for DESC (createdAt, id) ordering:
+    //   rows where createdAt is strictly earlier, OR same timestamp with a
+    //   lexicographically smaller UUID (which is also numerically earlier).
+    baseConditions.push(
+      or(
+        lt(predictions.createdAt, cursorTime),
+        and(
+          eq(predictions.createdAt, cursorTime),
+          lt(predictions.id, cursorKey.id),
+        ),
+      )!,
+    );
   }
 
+  // Fetch one extra row to determine whether a next page exists.
   const results = await db
     .select({
       id: predictions.id,
@@ -136,18 +185,21 @@ export async function getUserPredictions(
     })
     .from(predictions)
     .innerJoin(markets, eq(predictions.marketId, markets.id))
-    .where(and(...whereConditions))
+    .where(and(...baseConditions))
     .orderBy(desc(predictions.createdAt), desc(predictions.id))
     .limit(limit + 1);
 
   const hasMore = results.length > limit;
   const data = results.slice(0, limit);
 
-  let nextCursor = null;
-  if (hasMore && data.length > 0) {
-    const last = data[data.length - 1];
-    nextCursor = `${last.createdAt.toISOString()}|${last.id}`;
-  }
+  // Encode the cursor from the last row on this page using the shared helper,
+  // which stamps the current CURSOR_VERSION into the token so stale cursors
+  // are rejected after schema migrations rather than silently mis-paginating.
+  const last = data[data.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
+      : null;
 
   return {
     data: data.map((r) => ({
