@@ -11,6 +11,7 @@ import { z } from "zod";
 import { logger } from "../../config/logger";
 import { disputesRouter } from "../disputes";
 import { trendingRouter } from "./trending";
+import { tagsRouter } from "./tags";
 import { marketAuditRouter } from "../marketAudit";
 
 export const marketsRouter = Router();
@@ -19,6 +20,7 @@ marketsRouter.use("/:id/disputes", disputesRouter);
 
 marketsRouter.use(rateLimitAnon);
 marketsRouter.use("/trending", trendingRouter);
+marketsRouter.use("/tags", tagsRouter);
 
 // Per-market audit log: GET /api/markets/:id/audit (#216)
 marketsRouter.use("/:id/audit", marketAuditRouter);

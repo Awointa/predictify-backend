@@ -277,3 +277,70 @@ describe("Regression: ensure stub bypass is removed", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("GET /api/markets/tags", () => {
+  afterEach(() => {
+    setDbForTests(null);
+  });
+
+  it("returns market tags with counts", async () => {
+    // Mock the database to return tags
+    const mockTagsResult = [
+      { tag: "football", count: 5 },
+      { tag: "sports", count: 3 },
+      { tag: "politics", count: 2 },
+    ];
+
+    const mockDb = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn(async () => []),
+              })),
+            })),
+          })),
+        })),
+      })),
+      transaction: jest.fn(async (fn: Function) => fn({})),
+      execute: jest.fn(async () => ({
+        rows: mockTagsResult,
+      })),
+    } as unknown as Database;
+
+    setDbForTests(mockDb);
+
+    const res = await request(createApp()).get("/api/markets/tags");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      data: mockTagsResult,
+    });
+  });
+
+  it("returns empty array when no tags", async () => {
+    const mockDb = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn(async () => []),
+              })),
+            })),
+          })),
+        })),
+      })),
+      transaction: jest.fn(async (fn: Function) => fn({})),
+      execute: jest.fn(async () => ({
+        rows: [],
+      })),
+    } as unknown as Database;
+
+    setDbForTests(mockDb);
+
+    const res = await request(createApp()).get("/api/markets/tags");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [] });
+  });
+});

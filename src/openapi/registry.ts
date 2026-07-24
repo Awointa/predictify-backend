@@ -331,6 +331,31 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
+  path: "/api/markets/tags",
+  operationId: "getMarketTags",
+  tags: ["Markets"],
+  summary: "Get market tags with counts",
+  responses: {
+    200: {
+      description: "Market tags with counts",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.array(
+              z.object({
+                tag: z.string(),
+                count: z.number(),
+              }),
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/api/markets/{id}",
   operationId: "getMarketById",
   tags: ["Markets"],
