@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
@@ -67,6 +68,21 @@ export function errorHandler(
         code: ErrorCodes.VALIDATION_ERROR,
         message: "Validation failed",
         details: err.issues,
+        correlationId,
+        requestId: reqId,
+      },
+    });
+    return;
+  }
+
+  // 3.5. Error with custom status property
+  if (err && typeof (err as any).status === "number") {
+    const status = (err as any).status;
+    const code = (err as any).code || "error";
+    res.status(status).json({
+      error: {
+        code,
+        message: (err as any).message || "An error occurred",
         correlationId,
         requestId: reqId,
       },

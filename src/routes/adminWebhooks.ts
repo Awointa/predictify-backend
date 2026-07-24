@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from "express";
 import { requireAdmin } from "../middleware/requireAdmin";
-import type { WebhookDispatcher } from "../services/webhookDispatcher";
+import type { IWebhookDispatcher } from "../services/webhookDispatcher";
 import type { DlqRow, WebhookStore } from "../services/webhookStore";
 
 /**
@@ -14,7 +15,7 @@ import type { DlqRow, WebhookStore } from "../services/webhookStore";
  */
 export interface AdminWebhookDeps {
   store: WebhookStore;
-  dispatcher: WebhookDispatcher;
+  dispatcher: IWebhookDispatcher;
 }
 
 /** Shape the DLQ row for the API: payload bytes are exposed as base64, never raw. */
@@ -77,7 +78,7 @@ export function createAdminWebhooksRouter(deps: AdminWebhookDeps): Router {
         });
       }
 
-      const fresh = await deps.dispatcher.replayFromDlq(row);
+      const fresh: any = await deps.dispatcher.replayFromDlq(row);
       if (!fresh) {
         // Lost the idempotency race between the check above and the write.
         return res.status(409).json({ error: { code: "already_replayed" } });

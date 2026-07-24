@@ -28,6 +28,8 @@ const auditQuerySchema = z.object({
     .optional(),
 });
 
+import { searchAuditLogsHandler } from "./audit/search";
+
 export function createAdminAuditRouter(opts: AdminAuditRouterOptions = {}): Router {
   const router = Router();
   const limit = opts.rateLimitPerMinute ?? 60;
@@ -50,6 +52,9 @@ export function createAdminAuditRouter(opts: AdminAuditRouterOptions = {}): Rout
 
   // ── Admin guard ─────────────────────────────────────────────────────────────
   router.use(requireAdmin);
+
+  // ── POST /search ────────────────────────────────────────────────────────────
+  router.post("/search", searchAuditLogsHandler);
 
   // ── GET / ───────────────────────────────────────────────────────────────────
   router.get("/", async (req, res, next) => {

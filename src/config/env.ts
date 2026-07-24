@@ -1,4 +1,5 @@
-import { z } from "zod";
+import pino from "pino";
+import { envSchema } from "./env-schema";
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -11,6 +12,10 @@ const schema = z.object({
   JWT_ISSUER: z.string().default("predictify"),
   JWT_AUDIENCE: z.string().default("predictify-app"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  // Optional multi-key ring for zero-downtime JWT rotation.
+  // Format: "kid1:secret1,kid2:secret2" — see src/utils/keyRing.ts.
+  JWT_KEYS: z.string().optional(),
+  JWT_ACTIVE_KID: z.string().optional(),
   WORKER_HEARTBEAT_SECONDS: z.coerce.number().int().positive().default(30),
   STELLAR_NETWORK: z.enum(["testnet", "mainnet"]).default("testnet"),
   SOROBAN_RPC_URL: z.string().url(),
@@ -37,7 +42,12 @@ const schema = z.object({
   // ── Settle confirmer ──────────────────────────────────────────
   SETTLE_CONFIRMER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5_000),
   SETTLE_CONFIRMER_CONFIRMATION_LEDGERS: z.coerce.number().int().positive().default(2),
+  // ── Slow Query Alerter ──────────────────────────────────────────
+  SLOW_QUERY_ALERTER_ENABLED: z.coerce.boolean().default(false),
+  SLOW_QUERY_ALERTER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(60000), // 1 minute
+  SLOW_QUERY_ALERTER_MEAN_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(100), // 100ms
+  SLOW_QUERY_ALERTER_MAX_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(500), // 500ms
+  SLOW_QUERY_ALERTER_LIMIT: z.coerce.number().int().positive().default(10),
+  SLOW_QUERY_ALERTER_QUERY_MAX_LENGTH: z.coerce.number().int().positive().default(1000),
 });
 
-export const env = schema.parse(process.env);
-export type Env = z.infer<typeof schema>;
