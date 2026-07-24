@@ -1,5 +1,5 @@
 import express from "express";
-import { featureFlagsRouter } from './featureFlags';
+import { featureFlagsRouter } from './routes/featureFlags';
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { v4 as uuidv4 } from "uuid";
