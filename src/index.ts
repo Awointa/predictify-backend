@@ -34,6 +34,7 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
+import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
 
@@ -141,6 +142,7 @@ if (require.main === module) {
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
+    stopSlowQueryAlerter();
     await Promise.all([
       webhookWorker ? webhookWorker.stop() : Promise.resolve(),
       marketResolverWorker.stop(),
@@ -156,7 +158,7 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
-      probeHandle = startIndexerHealthProbe();
+      startSlowQueryAlerter();
 
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
