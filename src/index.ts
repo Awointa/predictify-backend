@@ -16,6 +16,7 @@ import { authRouter } from "./routes/auth";
 import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
 import { usersRouter } from "./routes/users";
+import { usersHealthRouter } from "./routes/users/health";
 import { userPortfolioRouter } from "./routes/users/portfolio";
 import { devicesRouter } from "./routes/devices";
 import { adminFeatureFlagsRouter } from "./routes/admin/feature-flags";
@@ -116,6 +117,7 @@ export function createApp(): express.Express {
   app.use("/api/leaderboard", leaderboardRouter);
   app.use("/api/rate-limit", rateLimitStatusRouter);
   app.use("/api/notifications", notificationsRouter);
+  app.use("/api/users/health", usersHealthRouter);
   app.use("/api/users", socialRouter);
   app.use("/api/users", userPortfolioRouter);
   app.use("/api/users", usersRouter);
