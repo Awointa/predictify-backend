@@ -887,23 +887,45 @@ paths:
       tags:
         - Users
       summary: List predictions for a Stellar address
+      description: |
+        Returns a cursor-paginated list of predictions for the given Stellar
+        address, ordered by `createdAt DESC, id DESC`.
+
+        **Cursor pagination**
+
+        Pass the opaque `nextCursor` value from a previous response back as the
+        `?cursor=` query parameter to fetch the next page.  When `nextCursor` is
+        `null` you have reached the last page.
+
+        Cursors are versioned base64url tokens.  A cursor minted under a
+        different schema version (e.g. from before a migration) is silently
+        ignored and the response restarts from the first page rather than
+        returning an error or a wrong offset.
       parameters:
         - schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           required: true
           name: address
           in: path
+          description: 56-character Stellar public key (G…)
         - schema:
             type: string
             enum: *ref_0
           required: false
           name: status
           in: query
+          description: Filter by prediction status.
         - schema:
             type: string
           required: false
           name: cursor
           in: query
+          description: >
+            Opaque, versioned base64url pagination cursor returned as
+            `nextCursor` from the previous page.  Omit or leave empty to start
+            from the first page.  An invalid or version-mismatched cursor is
+            treated as absent (restarts from page one).
         - schema:
             type: integer
             minimum: 1
@@ -912,6 +934,7 @@ paths:
           required: false
           name: limit
           in: query
+          description: Maximum number of predictions to return (1–100, default 20).
       responses:
         '200':
           description: Paginated predictions
@@ -924,14 +947,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Prediction'
+                    description: Predictions for this page, ordered by createdAt DESC.
                   nextCursor:
                     type: string
                     nullable: true
+                    description: >
+                      Opaque cursor for the next page, or null when this is the
+                      last page.  Pass verbatim as `?cursor=` on the next
+                      request.
                 required:
                   - data
                   - nextCursor
         '400':
-          description: Invalid address
+          description: Invalid address or query parameters
           content:
             application/json:
               schema:
