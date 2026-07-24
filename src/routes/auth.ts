@@ -7,6 +7,7 @@ import {
 } from "../services/refreshTokenService";
 import { createChallenge } from "../services/authChallengeService";
 import { verifyChallengeAndIssueJwt } from "../services/authVerifyService";
+import { RouteErrorFactory } from "../errors";
 
 export const authRouter = Router();
 
@@ -24,10 +25,7 @@ authRouter.post("/refresh", async (req, res, next) => {
     const refreshToken = parseRefreshToken(req.body);
 
     if (!refreshToken) {
-      res.status(400).json({
-        error: { code: "invalid_request", message: "refreshToken is required and must be a string" },
-      });
-      return;
+      throw RouteErrorFactory.badRequest("refreshToken is required and must be a string");
     }
 
     const result = await rotateRefreshToken(refreshToken);
@@ -46,10 +44,7 @@ authRouter.post("/logout", async (req, res, next) => {
     const refreshToken = parseRefreshToken(req.body);
 
     if (!refreshToken) {
-      res.status(400).json({
-        error: { code: "invalid_request", message: "refreshToken is required and must be a string" },
-      });
-      return;
+      throw RouteErrorFactory.badRequest("refreshToken is required and must be a string");
     }
 
     await revokeFamily(refreshToken);
@@ -59,23 +54,12 @@ authRouter.post("/logout", async (req, res, next) => {
   }
 });
 
-/**
- * POST /api/auth/wallet/logout
- *
- * Explicit wallet logout. Revokes the entire refresh-token family associated
- * with the supplied refresh token so that every session derived from the same
- * login is invalidated server-side. Idempotent: revoking an already-revoked or
- * unknown token still returns 204 so clients can safely retry.
- */
 authRouter.post("/wallet/logout", async (req, res, next) => {
   try {
     const refreshToken = parseRefreshToken(req.body);
 
     if (!refreshToken) {
-      res.status(400).json({
-        error: { code: "invalid_request", message: "refreshToken is required and must be a string" },
-      });
-      return;
+      throw RouteErrorFactory.badRequest("refreshToken is required and must be a string");
     }
 
     await revokeFamily(refreshToken);
@@ -93,10 +77,7 @@ authRouter.post("/challenge", async (req, res, next) => {
   try {
     const parsed = challengeBodySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({
-        error: { code: "invalid_request", message: "stellarAddress is required" },
-      });
-      return;
+      throw RouteErrorFactory.badRequest("stellarAddress is required");
     }
 
     const result = await createChallenge(parsed.data.stellarAddress);
@@ -122,10 +103,7 @@ authRouter.post("/verify", async (req, res, next) => {
   try {
     const parsed = verifyBodySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({
-        error: { code: "invalid_request", details: parsed.error.issues },
-      });
-      return;
+      throw RouteErrorFactory.validation("Invalid request body", parsed.error.flatten().fieldErrors as Record<string, string[]>);
     }
 
     const result = await verifyChallengeAndIssueJwt(

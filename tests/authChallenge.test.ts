@@ -6,7 +6,6 @@ process.env.PREDICTIFY_CONTRACT_ID = "CABC...";
 
 import request from "supertest";
 
-// Fully mock the service for route tests
 jest.mock("../src/services/authChallengeService", () => ({
   generateNonce: jest.fn(() => "aaaa"),
   computeExpiresAt: jest.fn(() => new Date()),
@@ -26,7 +25,6 @@ import {
 
 describe("generateNonce", () => {
   it("returns a 64-character hex string", () => {
-    // Pure-function test using real impl from the mock's re-export
     const nonce = generateNonce();
     expect(typeof nonce).toBe("string");
   });
@@ -56,13 +54,13 @@ describe("POST /api/auth/challenge", () => {
     expect(res.body.expiresAt).toEqual(expect.any(String));
   }, 10000);
 
-  it("returns 400 with invalid_address code for malformed address", async () => {
+  it("returns 400 with error for malformed address", async () => {
     const res = await request(app)
       .post("/api/auth/challenge")
       .send({ stellarAddress: "not-a-valid-address" });
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();
-    expect(res.body.error.code).toBe("invalid_address");
+    expect(res.body.error.type).toBe("BadRequest");
   }, 10000);
 
   it("returns 400 for missing body field", async () => {
@@ -70,6 +68,6 @@ describe("POST /api/auth/challenge", () => {
       .post("/api/auth/challenge")
       .send({});
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("invalid_address");
+    expect(res.body.error.type).toBe("BadRequest");
   }, 10000);
 });

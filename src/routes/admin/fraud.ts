@@ -1,16 +1,3 @@
-/**
- * Admin fraud review endpoint.
- *
- *   GET  /api/admin/fraud/flags?status=open&limit=50
- *   POST /api/admin/fraud/scan                        (manual trigger)
- *
- * Both endpoints:
- *   • require an admin JWT (Bearer token, role: "admin")
- *   • validate input at the boundary with Zod
- *   • return the project's standard error envelope on failure
- *   • echo the request id so the client can correlate logs
- */
-
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
@@ -23,6 +10,7 @@ import {
   listFraudFlags,
   runFraudScan,
 } from "../../services/fraudService";
+import { RouteErrorFactory } from "../../errors";
 
 const listQuerySchema = z.object({
   status: z.enum(["open", "dismissed", "confirmed"]).optional(),
@@ -44,9 +32,7 @@ const scanBodySchema = z
   .strict();
 
 export interface AdminFraudRouterOptions {
-  /** Inject a fake repo in tests. */
   repo?: FraudRepo;
-  /** Requests per minute per admin token. Default: 60 */
   rateLimitPerMinute?: number;
 }
 
@@ -81,23 +67,14 @@ export function createAdminFraudRouter(
 
   router.use(requireAdmin);
 
-  // ── GET /flags ────────────────────────────────────────────────────────────
   router.get("/flags", async (req, res, next) => {
     try {
       const requestId = requestIdOf({ id: (req as { id?: unknown }).id });
       const parsed = listQuerySchema.safeParse(req.query);
       if (!parsed.success) {
-        res.setHeader(REQUEST_ID_HEADER, requestId);
-        res.status(400).json({
-          error: {
-            code: "validation_error",
-            message:
-              parsed.error.issues[0]?.message ?? "invalid query parameters",
-            details: parsed.error.issues,
-            requestId,
-          },
-        });
-        return;
+        throw RouteErrorFactory.validation(
+          parsed.error.issues[0]?.message ?? "invalid query parameters",
+        );
       }
       const rows = await listFraudFlags(parsed.data, repo);
       res.setHeader(REQUEST_ID_HEADER, requestId);
@@ -107,24 +84,15 @@ export function createAdminFraudRouter(
     }
   });
 
-  // ── POST /scan ────────────────────────────────────────────────────────────
   router.post("/scan", async (req, res, next) => {
     try {
       const requestId = requestIdOf({ id: (req as { id?: unknown }).id });
       const body = req.body ?? {};
       const parsed = scanBodySchema.safeParse(body);
       if (!parsed.success) {
-        res.setHeader(REQUEST_ID_HEADER, requestId);
-        res.status(400).json({
-          error: {
-            code: "validation_error",
-            message:
-              parsed.error.issues[0]?.message ?? "invalid request body",
-            details: parsed.error.issues,
-            requestId,
-          },
-        });
-        return;
+        throw RouteErrorFactory.validation(
+          parsed.error.issues[0]?.message ?? "invalid request body",
+        );
       }
       const result = await runFraudScan(repo, {
         ...parsed.data,
