@@ -17,6 +17,8 @@ import { predictionsRouter } from "./routes/predictions";
 import { usersRouter } from "./routes/users";
 import { userPortfolioRouter } from "./routes/users/portfolio";
 import { leaderboardRouter } from "./routes/leaderboard";
+import { globalLeaderboardRouter } from "./routes/leaderboard/global";
+import { devicesRouter } from "./routes/devices";
 import { createDocsRouter } from "./routes/docs";
 import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
@@ -24,7 +26,7 @@ import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
 import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
 import { errorHandler } from "./middleware/errorHandler";
-import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
+import { stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 import { requestContextStorage } from "./lib/requestContext";
 import { REQUEST_ID_HEADER } from "./lib/http";
 import { register } from "./metrics/registry";
@@ -51,7 +53,7 @@ export interface AppDeps {
   webhooks?: any;
 }
 
-export function createApp(deps: AppDeps = {}): express.Express {
+export function createApp(_deps: AppDeps = {}): express.Express {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -108,6 +110,7 @@ export function createApp(deps: AppDeps = {}): express.Express {
   app.use("/api/markets", marketsRouter);
   app.use("/api/predictions", predictionsRouter);
   app.use("/api/leaderboard", leaderboardRouter);
+  app.use("/api/leaderboard/global", globalLeaderboardRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/users", socialRouter);
   app.use("/api/users", userPortfolioRouter);
