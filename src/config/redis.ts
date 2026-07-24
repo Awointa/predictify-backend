@@ -1,9 +1,2 @@
-import IORedis from "ioredis";
-import { env } from "./env";
-import { logger } from "./logger";
-
-export const redis = new IORedis(env.REDIS_URL);
-
-redis.on("error", (err) => {
-  logger.error({ err }, "Redis connection error");
-});
+/** Redis client stub — replace with a real ioredis/redis client when needed. */
+export const redis: null = null;

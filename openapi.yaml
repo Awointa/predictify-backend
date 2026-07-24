@@ -1488,135 +1488,122 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-  /api/admin/audit/export:
+
+  /api/admin/webhooks/dlq:
     get:
+      summary: List dead-lettered webhook deliveries
+      description: |
+        Returns a paginated, newest-first list of dead-lettered webhook deliveries
+        for operator review. Pagination is keyset-based so listings stay stable
+        while the DLQ is being actively written to or replayed.
       tags:
-        - Admin
-      summary: Export audit log as NDJSON
+        - Admin Webhooks
       security:
         - bearerAuth: []
       parameters:
-        - schema:
-            type: string
-          required: false
-          name: action
+        - name: limit
           in: query
-        - schema:
-            type: string
+          description: Items per page (1–100, default 20). Non-numeric values return 400.
           required: false
-          name: actor
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
           in: query
-        - schema:
-            type: string
-            format: date-time
+          description: Opaque page token from a previous response. Omit to start from the first page.
           required: false
-          name: startDate
-          in: query
-        - schema:
+          schema:
             type: string
-            format: date-time
-          required: false
-          name: endDate
-          in: query
+            minLength: 1
       responses:
         '200':
-          description: Audit log export stream in NDJSON format
+          description: Paginated list of DLQ items
           content:
-            application/x-ndjson:
+            application/json:
               schema:
-                type: string
+                type: object
+                required:
+                  - data
+                  - nextCursor
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - originalId
+                        - eventId
+                        - eventType
+                        - targetUrl
+                        - payloadBase64
+                        - signature
+                        - attempts
+                        - maxAttempts
+                        - lastError
+                        - failedAt
+                        - replayedAt
+                        - replayDeliveryId
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        originalId:
+                          type: string
+                          format: uuid
+                          description: ID of the original live delivery that was dead-lettered
+                        eventId:
+                          type: string
+                        eventType:
+                          type: string
+                          example: market.resolved
+                        targetUrl:
+                          type: string
+                          format: uri
+                        payloadBase64:
+                          type: string
+                          format: byte
+                          description: Original signed request body, base64-encoded
+                        signature:
+                          type: string
+                          description: HMAC-SHA256 signature over the original payload bytes
+                        headers:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                        attempts:
+                          type: integer
+                        maxAttempts:
+                          type: integer
+                        lastError:
+                          type: string
+                          description: Error message from the final failed attempt
+                        failedAt:
+                          type: string
+                          format: date-time
+                        replayedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        replayDeliveryId:
+                          type: string
+                          format: uuid
+                          nullable: true
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Opaque cursor for the next page; null if this is the last page
         '400':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationErrorBody'
-        '401':
-          description: Unauthorized
+          description: Invalid query parameters (non-numeric limit or empty cursor)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
         '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: Rate limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-  /api/admin/db/explain:
-    post:
-      tags:
-        - Admin
-      summary: Execute EXPLAIN ANALYZE on allowlisted queries
-      security:
-        - bearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExplainRequestBody'
-      responses:
-        '200':
-          description: Explain plan generated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExplainResponseBody'
-        '400':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationErrorBody'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: Rate limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-  /api/admin/health/detail:
-    get:
-      tags:
-        - Admin
-      summary: Detailed runtime health (admin only)
-      description: >-
-        Returns DB pool stats, indexer cursor/lag, and Soroban RPC status. Returns 207 when any sub-check is degraded or
-        errored.
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: All checks healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminHealthDetail'
-        '207':
-          description: One or more checks degraded or errored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminHealthDetail'
-        '403':
-          description: Forbidden — missing or non-admin JWT
+          description: Missing, invalid, or non-admin JWT
           content:
             application/json:
               schema:
