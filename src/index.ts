@@ -22,8 +22,6 @@ import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
-import { createAdminWebhooksRouter } from "./routes/adminWebhooks";
-import { createAdminDlqRouter } from "./routes/admin/webhooks/dlq";
 import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
 import type { WebhookStore } from "./services/webhookStore";
@@ -41,8 +39,7 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
-import { rateLimitStatusRouter } from "./routes/rate-limit/status";
-import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
+import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
 
@@ -191,7 +188,7 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
-      probeHandle = startIndexerHealthProbe();
+      const probeHandle = startIndexerHealthProbe();
 
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
