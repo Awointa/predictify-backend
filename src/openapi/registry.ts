@@ -475,6 +475,51 @@ registry.registerPath({
   },
 });
 
+// ── /api/rate-limit/status ──────────────────────────────────────────────────────
+
+const AnonRateLimitStatus = z
+  .object({
+    data: z.object({
+      type: z.literal("anonymous"),
+      clientIp: z.string(),
+      limit: z.number().int(),
+      used: z.number().int(),
+      remaining: z.number().int(),
+      windowMs: z.number().int(),
+      resetAt: z.string().datetime(),
+    }),
+  })
+  .openapi("AnonRateLimitStatus");
+
+const AuthRateLimitStatus = z
+  .object({
+    data: z.object({
+      type: z.literal("authenticated"),
+      limit: z.number().int(),
+      windowMs: z.number().int(),
+      bypasses: z.literal(true),
+    }),
+  })
+  .openapi("AuthRateLimitStatus");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/rate-limit/status",
+  operationId: "getRateLimitStatus",
+  tags: ["Rate Limiting"],
+  summary: "Get the current anonymous rate-limit status for the caller",
+  responses: {
+    200: {
+      description: "Rate-limit status (type differs for anonymous vs authenticated callers)",
+      content: {
+        "application/json": {
+          schema: z.union([AnonRateLimitStatus, AuthRateLimitStatus]),
+        },
+      },
+    },
+  },
+});
+
 // ── /api/markets/featured ────────────────────────────────────────────────────
 
 registry.registerPath({

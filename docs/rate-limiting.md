@@ -26,7 +26,43 @@ HTTP **429 Too Many Requests** with:
 
 - Middleware: [`src/middleware/rateLimitAnon.ts`](../src/middleware/rateLimitAnon.ts)
 - Applied on: `marketsRouter`, `leaderboardRouter`
+- Status endpoint: `GET /api/rate-limit/status` (see below)
 - Tests: [`tests/rateLimitAnon.test.ts`](../tests/rateLimitAnon.test.ts)
+
+## Status endpoint
+
+`GET /api/rate-limit/status` returns the current anonymous rate-limit state
+for the caller's IP. Authenticated callers (Bearer token) receive a
+`bypasses: true` response.
+
+### Anonymous response (200)
+
+```json
+{
+  "data": {
+    "type": "anonymous",
+    "clientIp": "127.0.0.1",
+    "limit": 60,
+    "used": 3,
+    "remaining": 57,
+    "windowMs": 60000,
+    "resetAt": "2026-07-24T12:00:00.000Z"
+  }
+}
+```
+
+### Authenticated response (200)
+
+```json
+{
+  "data": {
+    "type": "authenticated",
+    "limit": 60,
+    "windowMs": 60000,
+    "bypasses": true
+  }
+}
+```
 
 ## Verification
 
