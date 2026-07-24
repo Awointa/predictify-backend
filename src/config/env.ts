@@ -1,13 +1,11 @@
-import { envSchema, formatEnvErrors } from "./env-schema";
+import { envSchema } from "./env-schema";
+import { formatEnvErrors } from "./env-schema";
 
-const result = envSchema.safeParse(process.env);
+const parsed = envSchema.safeParse(process.env);
 
-if (!result.success) {
-  // Print all validation failures at startup and hard-exit so misconfigured
-  // deployments fail fast rather than blowing up at request time.
-  console.error("❌  Invalid environment configuration:\n" + formatEnvErrors(result.error));
+if (!parsed.success) {
+  console.error("❌ Invalid environment variables:\n" + formatEnvErrors(parsed.error));
   process.exit(1);
 }
 
-export const env = result.data;
-export type Env = typeof env;
+export const env = parsed.data;

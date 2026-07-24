@@ -932,6 +932,31 @@ const PatchNotificationPreferencesRequest = z
   .object({ preferences: z.array(NotificationPreference).min(1) })
   .openapi("PatchNotificationPreferencesRequest");
 
+const NotificationId = z.string().uuid().openapi("NotificationId");
+
+const MarkNotificationsReadRequest = z
+  .object({
+    notificationIds: z.array(NotificationId).optional(),
+    markAllAsRead: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (data) => (data.notificationIds?.length ?? 0) > 0 || data.markAllAsRead === true,
+    {
+      message: "Either notificationIds (non-empty array) or markAllAsRead=true is required",
+      path: ["notificationIds"],
+    },
+  )
+  .openapi("MarkNotificationsReadRequest");
+
+const MarkNotificationsReadResponse = z
+  .object({
+    data: z.object({
+      updatedCount: z.number().int().nonnegative(),
+    }),
+  })
+  .openapi("MarkNotificationsReadResponse");
+
 registry.registerPath({
   method: "get",
   path: "/api/notifications/preferences",
@@ -972,6 +997,38 @@ registry.registerPath({
       description: "Updated notification preferences",
       content: {
         "application/json": { schema: NotificationPreferencesResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/notifications/mark-read",
+  operationId: "markNotificationsRead",
+  tags: ["Notifications"],
+  summary: "Mark notifications as read for the authenticated user",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: MarkNotificationsReadRequest },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Notifications marked as read",
+      content: {
+        "application/json": { schema: MarkNotificationsReadResponse },
       },
     },
     400: {

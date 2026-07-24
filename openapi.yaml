@@ -397,6 +397,32 @@ components:
           minItems: 1
       required:
         - preferences
+    MarkNotificationsReadResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            updatedCount:
+              type: integer
+              minimum: 0
+          required:
+            - updatedCount
+      required:
+        - data
+    NotificationId:
+      type: string
+      format: uuid
+    MarkNotificationsReadRequest:
+      type: object
+      properties:
+        notificationIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationId'
+        markAllAsRead:
+          type: boolean
+      additionalProperties: false
     CurrentUserProfile:
       type: object
       properties:
@@ -1567,6 +1593,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/notifications/mark-read:
+    post:
+      operationId: markNotificationsRead
+      tags:
+        - Notifications
+      summary: Mark notifications as read for the authenticated user
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkNotificationsReadRequest'
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkNotificationsReadResponse'
         '400':
           description: Validation error
           content:
