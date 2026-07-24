@@ -1650,13 +1650,23 @@ paths:
           description: Current user profile
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/CurrentUserProfile'
-                required:
-                  - data
+                schema:
+                  type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/CurrentUserProfile'
+                  required:
+                    - data
+                examples:
+                  currentUser:
+                    summary: Example authenticated user profile
+                    value:
+                      data:
+                        stellarAddress: GCFXExampleUser1111111111111111111111111111
+                        createdAt: '2026-07-01T12:34:56.000Z'
+                        totals:
+                          prediction_count: 42
+                          claim_count: 3
         '401':
           description: Unauthorized
           content:
@@ -1740,6 +1750,16 @@ paths:
                 required:
                   - data
                   - nextCursor
+              examples:
+                samplePage:
+                  summary: Example predictions page
+                  value:
+                    data:
+                      - id: '11111111-1111-4111-8111-111111111111'
+                        marketId: 'market-abc-123'
+                        status: pending
+                        createdAt: '2026-07-01T12:00:00.000Z'
+                    nextCursor: null
         '400':
           description: Invalid address or query parameters
           content:
@@ -1776,6 +1796,22 @@ paths:
                     $ref: '#/components/schemas/UserProfile'
                 required:
                   - data
+                examples:
+                  publicProfile:
+                    summary: Example public user profile
+                    value:
+                      data:
+                        id: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
+                        stellarAddress: GCFXExampleUser2222222222222222222222
+                        joinedAt: '2025-12-15T09:00:00.000Z'
+                        predictions:
+                          - id: '22222222-2222-4222-8222-222222222222'
+                            marketId: 'market-def-456'
+                            status: confirmed
+                            createdAt: '2026-01-02T10:00:00.000Z'
+                        totals:
+                          prediction_count: 7
+                          claim_count: 1
         '400':
           description: Invalid Stellar address
           content:
@@ -1814,6 +1850,14 @@ paths:
                     $ref: '#/components/schemas/FollowResult'
                 required:
                   - data
+                examples:
+                  followCreated:
+                    summary: Example follow creation result
+                    value:
+                      data:
+                        follower: GCFXExampleUser3333333333333333333333
+                        followee: GCFXExampleUser4444444444444444444444
+                        followedAt: '2026-07-10T08:00:00.000Z'
         '400':
           description: Validation error
           content:
@@ -1851,6 +1895,14 @@ paths:
                     $ref: '#/components/schemas/FollowResult'
                 required:
                   - data
+                examples:
+                  followRemoved:
+                    summary: Example follow removal result
+                    value:
+                      data:
+                        follower: GCFXExampleUser3333333333333333333333
+                        followee: GCFXExampleUser4444444444444444444444
+                        followedAt: '2026-07-10T08:00:00.000Z'
         '400':
           description: Validation error
           content:
