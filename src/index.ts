@@ -35,6 +35,7 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
+import { rateLimitStatusRouter } from "./routes/rate-limit/status";
 import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
@@ -109,6 +110,7 @@ export function createApp(deps: AppDeps = {}): express.Express {
   app.use("/api/markets", marketsRouter);
   app.use("/api/predictions", predictionsRouter);
   app.use("/api/leaderboard", leaderboardRouter);
+  app.use("/api/rate-limit", rateLimitStatusRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/users", socialRouter);
   app.use("/api/users", userPortfolioRouter);
