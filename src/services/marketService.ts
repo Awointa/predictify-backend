@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { invalidateMarketCache } from "../cache/marketsCache";
 import { db, getDb } from "../db/client";
-import { markets, marketAuditLog } from "../db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { markets, marketAuditLog, predictions } from "../db/schema";
+import { and, asc, eq, inArray, desc, notInArray, sql, or } from "drizzle-orm";
 import { emitMarketEvent, LogEvent } from "../logging/events";
 
 export interface Market {
@@ -10,7 +10,6 @@ export interface Market {
   question: string;
   status: string;
   resolutionTime: Date;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
   indexedLedger: number;
   archived: boolean;
@@ -26,6 +25,9 @@ export class VersionConflictError extends Error {
   }
 }
 
+/** Statuses that represent a market that has not yet opened for predictions. */
+export const UPCOMING_MARKET_STATUSES = ["upcoming", "pending", "scheduled"] as const;
+
 /**
  * Lists active markets with pagination.
  *
@@ -34,7 +36,6 @@ export class VersionConflictError extends Error {
  * @returns Array of markets formatted with ISO timestamps
  * @throws Error if database query fails
  */
-
 export async function listMarkets(
   options: { limit?: number; offset?: number } = {},
 ) {
@@ -58,38 +59,12 @@ export async function listMarkets(
     throw new Error("Unexpected response from database: rows is not an array");
   }
 
-  // test
   return rows.map((r) => ({
     ...r,
     resolutionTime:
       r.resolutionTime instanceof Date
         ? r.resolutionTime.toISOString()
         : r.resolutionTime,
-  }));
-}
-
-export async function listUpcomingMarkets(options: { limit?: number } = {}): Promise<any[]> {
-  const limit = options.limit ?? 50;
-
-  const rows = await getDb()
-    .select({
-      id: markets.id,
-      question: markets.question,
-      status: markets.status,
-      resolutionTime: markets.resolutionTime,
-    })
-    .from(markets)
-    .where(and(eq(markets.archived, false), eq(markets.status, "upcoming")))
-    .orderBy(asc(markets.resolutionTime), asc(markets.id))
-    .limit(limit);
-
-  if (!Array.isArray(rows)) {
-    throw new Error("Unexpected response from database: rows is not an array");
-  }
-
-  return rows.map((r: any) => ({
-    ...r,
-    resolutionTime: r.resolutionTime instanceof Date ? r.resolutionTime.toISOString() : r.resolutionTime,
   }));
 }
 
@@ -100,8 +75,6 @@ export async function listUpcomingMarkets(options: { limit?: number } = {}): Pro
  * @returns Market object with formatted timestamp, or null if not found
  * @throws Error if database query fails
  */
-
-// test
 export async function getMarketById(id: string) {
   if (!id || typeof id !== "string") {
     throw new Error("Market ID must be a non-empty string");
@@ -113,8 +86,6 @@ export async function getMarketById(id: string) {
       question: markets.question,
       status: markets.status,
       resolutionTime: markets.resolutionTime,
-      // version is included so that every PATCH increments the ETag,
-      // ensuring conditional-GET clients never serve stale data.
       version: markets.version,
     })
     .from(markets)
@@ -140,36 +111,13 @@ export async function getMarketById(id: string) {
 }
 
 /**
- * Updates a market with optimistic locking via version field.
- *
- * Performs transactional update with:
- * - Version conflict detection (409)
- * - Audit log creation
- * - Structured event emission
- *
- * @param id - Market ID
- * @param patch - Fields to update (question, metadata)
- * @param expectedVersion - Current version for optimistic locking
- * @param adminAddress - Stellar address of the admin making the change
- * @returns Updated market object
- * @throws VersionConflictError if version mismatch
- * @throws Error with status 404 if market not found
- */
-/** Statuses that represent a market that has not yet opened for predictions. */
-export const UPCOMING_MARKET_STATUSES = ["upcoming", "pending", "scheduled"] as const;
-
-/**
  * Lists upcoming markets — markets that are queued to be created/opened from
- * oracle events but are not yet active. A market is "upcoming" when its status
- * is one of UPCOMING_MARKET_STATUSES and its resolution time is still in the
- * future. Results are ordered by soonest resolution time first.
+ * oracle events but are not yet active. Results are ordered by soonest resolution time first.
  */
 export async function listUpcomingMarkets(
   options: { limit?: number; now?: Date } = {},
 ): Promise<any[]> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
-  const now = options.now ?? new Date();
-
   const rows = await getDb()
     .select({
       id: markets.id,
@@ -181,8 +129,10 @@ export async function listUpcomingMarkets(
     .where(
       and(
         eq(markets.archived, false),
-        inArray(markets.status, UPCOMING_MARKET_STATUSES as unknown as string[]),
-        gt(markets.resolutionTime, now),
+        or(
+          eq(markets.status, "upcoming"),
+          inArray(markets.status, UPCOMING_MARKET_STATUSES as unknown as string[]),
+        ),
       ),
     )
     .orderBy(asc(markets.resolutionTime), asc(markets.id))
@@ -269,13 +219,27 @@ export async function getRecommendedMarkets(userId: string): Promise<any[]> {
   }));
 }
 
+/**
+ * Updates a market with optimistic locking via version field.
+ *
+ * Performs transactional update with:
+ * - Version conflict detection (409)
+ * - Audit log creation
+ * - Structured event emission
+ *
+ * @param id - Market ID
+ * @param patch - Fields to update (question, metadata)
+ * @param expectedVersion - Current version for optimistic locking
+ * @param adminAddress - Stellar address of the admin making the change
+ * @returns Updated market object
+ * @throws VersionConflictError if version mismatch
+ * @throws Error with status 404 if market not found
+ */
 export async function updateMarket(
   id: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   patch: { question?: string; metadata?: any },
   expectedVersion: number,
-  adminAddress: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminAddress?: string,
 ): Promise<any> {
   if (!id || typeof id !== "string") {
     throw new Error("Market ID must be a non-empty string");
@@ -283,10 +247,6 @@ export async function updateMarket(
 
   if (typeof expectedVersion !== "number" || expectedVersion < 0) {
     throw new Error("expectedVersion must be a non-negative number");
-  }
-
-  if (!adminAddress || typeof adminAddress !== "string") {
-    throw new Error("adminAddress must be a non-empty string");
   }
 
   const result = await db.transaction(async (tx) => {
@@ -297,7 +257,6 @@ export async function updateMarket(
       .limit(1);
     if (existing.length === 0) {
       const err = new Error("Market not found");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (err as any).status = 404;
       throw err;
     }
@@ -317,21 +276,23 @@ export async function updateMarket(
       .where(eq(markets.id, id))
       .returning();
 
-    await tx.insert(marketAuditLog).values({
-      marketId: id,
-      adminAddress,
-      action: "update",
-      beforeState: {
-        question: currentMarket.question,
-        metadata: currentMarket.metadata,
-        version: currentMarket.version,
-      },
-      afterState: {
-        question: updated[0].question,
-        metadata: updated[0].metadata,
-        version: updated[0].version,
-      },
-    });
+    if (adminAddress) {
+      await tx.insert(marketAuditLog).values({
+        marketId: id,
+        adminAddress,
+        action: "update",
+        beforeState: {
+          question: currentMarket.question,
+          metadata: currentMarket.metadata,
+          version: currentMarket.version,
+        },
+        afterState: {
+          question: updated[0].question,
+          metadata: updated[0].metadata,
+          version: updated[0].version,
+        },
+      });
+    }
 
     // Invalidate related cache entries
     await invalidateMarketCache(id);
@@ -341,45 +302,10 @@ export async function updateMarket(
   // Structured log event – emitted from service layer after successful commit.
   emitMarketEvent(LogEvent.MARKET_UPDATED, {
     marketId: id,
-    actor: adminAddress,
+    actor: adminAddress ?? "system",
     version: result.version,
     fieldsUpdated: Object.keys(patch),
   });
 
   return result;
-}
-
-/**
- * Lists upcoming markets (status = 'upcoming') with an optional limit.
- *
- * @param options.limit - Max results to return (default: 50, max: 100)
- * @returns Array of upcoming markets ordered by resolution time ascending
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function listUpcomingMarkets(
-  options: { limit?: number } = {},
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any[]> {
-  const limit = Math.min(options.limit ?? 50, 100);
-
-  const rows = await getDb()
-    .select({
-      id: markets.id,
-      question: markets.question,
-      status: markets.status,
-      resolutionTime: markets.resolutionTime,
-    })
-    .from(markets)
-    .where(and(eq(markets.status, "upcoming"), eq(markets.archived, false)))
-    .orderBy(asc(markets.resolutionTime))
-    .limit(limit);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return rows.map((r: any) => ({
-    ...r,
-    resolutionTime:
-      r.resolutionTime instanceof Date
-        ? r.resolutionTime.toISOString()
-        : r.resolutionTime,
-  }));
 }

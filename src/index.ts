@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import express from "express";
+import { featureFlagsRouter } from './routes/admin/featureFlags';
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { v4 as uuidv4 } from "uuid";
@@ -16,6 +16,7 @@ import { authRouter } from "./routes/auth";
 import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
 import { usersRouter } from "./routes/users";
+import { usersHealthRouter } from "./routes/users/health";
 import { userPortfolioRouter } from "./routes/users/portfolio";
 import { devicesRouter } from "./routes/devices";
 import { adminFeatureFlagsRouter } from "./routes/admin/feature-flags";
@@ -24,14 +25,12 @@ import { leaderboardRouter } from "./routes/leaderboard";
 import { globalLeaderboardRouter } from "./routes/leaderboard/global";
 import { devicesRouter } from "./routes/devices";
 import { createDocsRouter } from "./routes/docs";
-import { devicesRouter } from "./routes/devices";
 import { sessionsRouter } from "./routes/me/sessions";
 import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
 import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
-import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
 import { stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 import { requestContextStorage } from "./lib/requestContext";
@@ -44,8 +43,9 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
-import { devicesRouter } from "./routes/devices";
-import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
+import { rateLimitStatusRouter } from "./routes/rate-limit/status";
+import { adminRateLimitInspectRouter } from "./routes/admin/rate-limit/inspect";
+import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
 
@@ -58,24 +58,9 @@ function sanitizeRequestId(raw: string): string | undefined {
   return sanitized.length > 0 ? sanitized : undefined;
 }
 
-/** Dependency-injection options for `createApp`. */
-export interface CreateAppOptions {
-  /** Webhook store + dispatcher to inject into admin webhook routes.
-   *  When omitted, those routes are not mounted (production wires them via
-   *  `DrizzleWebhookStore` after `connectWithRetry()` resolves). */
-  webhooks?: {
-    store: WebhookStore;
-    dispatcher: WebhookDispatcher;
-  };
-}
-
-export function createApp(_deps: AppDeps = {}): express.Express {
+export function createApp(): express.Express {
   const app = express();
 
-  // Disable Express's built-in ETag generation — we manage strong ETags
-  // explicitly in src/middleware/etag.ts for the resources that need them.
-  // Leaving Express's weak ETags enabled would add spurious `W/"..."` headers
-  // on every JSON response, including error envelopes.
   app.set("etag", false);
 
   if (env.TRUST_PROXY) {
@@ -136,6 +121,7 @@ export function createApp(_deps: AppDeps = {}): express.Express {
   app.use("/api/leaderboard/global", globalLeaderboardRouter);
   app.use("/api/rate-limit", rateLimitStatusRouter);
   app.use("/api/notifications", notificationsRouter);
+  app.use("/api/users/health", usersHealthRouter);
   app.use("/api/users", socialRouter);
   app.use("/api/users", userPortfolioRouter);
   app.use("/api/users", usersRouter);
@@ -143,8 +129,11 @@ export function createApp(_deps: AppDeps = {}): express.Express {
   app.use("/api/me/sessions", sessionsRouter);
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/users", adminUsersRouter);
+  app.use("/api/admin/feature-flags", adminFeatureFlagsRouter);
+  app.use('/feature-flags', featureFlagsRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
-  app.use("/api/admin/db", adminDbVacuumRouter);
+  app.use("/api/admin/schema-versions", adminSchemaVersionsRouter);
+  app.use("/api/admin/rate-limit", adminRateLimitInspectRouter);
 
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
@@ -167,10 +156,16 @@ export function createApp(_deps: AppDeps = {}): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
+  let probeHandle: ReturnType<typeof setInterval> | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
     stopSlowQueryAlerter();
+    stopIndexerHealthProbe();
+    if (probeHandle) {
+      clearInterval(probeHandle);
+      probeHandle = null;
+    }
     await Promise.all([
       webhookWorker ? webhookWorker.stop() : Promise.resolve(),
       marketResolverWorker.stop(),
@@ -186,9 +181,9 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
+      startSlowQueryAlerter();
       probeHandle = startIndexerHealthProbe();
 
-      const probeHandle = startIndexerHealthProbe();
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
         logger.info(`Swagger UI available at http://localhost:${env.PORT}/docs`);
@@ -201,15 +196,24 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
+        await stopWorkers();
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
         process.exit(0);
       });
 
-      process.on("SIGINT", () => {
+      process.on("SIGINT", async () => {
         logger.info("SIGINT received, shutting down gracefully");
+        const forceExit = setTimeout(() => {
+          logger.warn("Forced exit after shutdown timeout");
+          process.exit(1);
+        }, 5000).unref();
+
+        await stopWorkers();
         stopScheduler();
+        await closeDb();
+        clearTimeout(forceExit);
         process.exit(0);
       });
     })
@@ -217,32 +221,4 @@ if (require.main === module) {
       logger.fatal({ err }, "Failed to start server");
       process.exit(1);
     });
-
-  process.on("SIGTERM", async () => {
-    logger.info("SIGTERM received, shutting down");
-    const forceExit = setTimeout(() => {
-      logger.warn("Forced exit after shutdown timeout");
-      process.exit(1);
-    }, 5000).unref();
-
-    await stopWorkers();
-    stopScheduler();
-    await closeDb();
-    clearTimeout(forceExit);
-    process.exit(0);
-  });
-
-  process.on("SIGINT", async () => {
-    logger.info("SIGINT received, shutting down gracefully");
-    const forceExit = setTimeout(() => {
-      logger.warn("Forced exit after shutdown timeout");
-      process.exit(1);
-    }, 5000).unref();
-
-    await stopWorkers();
-    stopScheduler();
-    await closeDb();
-    clearTimeout(forceExit);
-    process.exit(0);
-  });
 }

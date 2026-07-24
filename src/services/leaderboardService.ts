@@ -22,9 +22,9 @@ function getMaterializationViewName(period: LeaderboardPeriod): string {
     }
     case LeaderboardPeriod.WEEKLY: {
       return "leaderboard_weekly_mv";
+    }
     default:
       throw new Error(`Unknown period: ${_exhaustive}`);
-    }
   }
 }
 
