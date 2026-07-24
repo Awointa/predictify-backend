@@ -35,6 +35,9 @@ Collected by `prom-client`'s `collectDefaultMetrics`:
 | `indexer_polls_total` | Counter | — | Total indexer poll cycles completed |
 | `webhook_deliveries_total` | Counter | `status` | Webhook deliveries by outcome |
 | `auth_verifications_total` | Counter | `outcome` | Auth verification attempts by result |
+| `signup_anomaly_scans_total` | Counter | — | Signup-rate anomaly scans completed ([signup-anomaly.md](signup-anomaly.md)) |
+| `signup_anomalies_detected_total` | Counter | `severity` | Anomalous signup buckets detected (`warning`, `critical`) |
+| `signup_anomaly_top_score` | Gauge | — | Highest modified z-score from the most recent signup scan |
 
 ## Content type
 

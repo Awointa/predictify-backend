@@ -50,8 +50,21 @@ export const settleConfirmerFailedTotal = new Counter({
   registers: [register],
 });
 
-export const indexerLagLedgers = new Gauge({
-  name: "indexer_lag_ledgers",
-  help: "Current lag between the chain tip and the last indexed ledger",
+export const signupAnomalyScansTotal = new Counter({
+  name: "signup_anomaly_scans_total",
+  help: "Total number of signup-rate anomaly scans completed",
+  registers: [register],
+});
+
+export const signupAnomaliesDetectedTotal = new Counter({
+  name: "signup_anomalies_detected_total",
+  help: "Total number of anomalous signup buckets detected, segmented by severity (warning, critical)",
+  labelNames: ["severity"] as const,
+  registers: [register],
+});
+
+export const signupAnomalyTopScore = new Gauge({
+  name: "signup_anomaly_top_score",
+  help: "Highest modified z-score observed in the most recent signup-rate anomaly scan",
   registers: [register],
 });
