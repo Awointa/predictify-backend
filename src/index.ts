@@ -10,6 +10,8 @@ import { idempotency } from "./middleware/idempotency";
 import { defaultBodySizeLimitMiddleware, webhookBodySizeLimitMiddleware } from "./middleware/bodySize";
 import { healthRouter } from "./routes/health";
 import dependenciesRouter from "./routes/healthz/dependencies";
+import { createReadyRouter } from "./routes/health/ready";
+import { redisConnection } from "./queue";
 import { authRouter } from "./routes/auth";
 import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
@@ -26,10 +28,9 @@ import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
-import { adminDbVacuumRouter } from "./routes/admin/db/vacuum";
+import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
+import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
-import type { WebhookStore } from "./services/webhookStore";
-import type { WebhookDispatcher } from "./services/webhookDispatcher";
 import { requestContextStorage } from "./lib/requestContext";
 import { REQUEST_ID_HEADER } from "./lib/http";
 import { register } from "./metrics/registry";
@@ -65,7 +66,7 @@ export interface CreateAppOptions {
   };
 }
 
-export function createApp(options: CreateAppOptions = {}): express.Express {
+export function createApp(_deps: AppDeps = {}): express.Express {
   const app = express();
 
   // Disable Express's built-in ETag generation — we manage strong ETags
@@ -116,6 +117,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use(metricsMiddleware);
   app.use("/health", healthRouter);
   app.use("/healthz/dependencies", dependenciesRouter);
+  app.use("/api/health/ready", createReadyRouter({ db, redis: redisConnection }));
 
   const mutationMethods = ["POST", "PATCH"] as const;
   app.use("/api", (req, res, next) =>
@@ -161,7 +163,6 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
-  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -196,7 +197,6 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
@@ -205,7 +205,6 @@ if (require.main === module) {
 
       process.on("SIGINT", () => {
         logger.info("SIGINT received, shutting down gracefully");
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         process.exit(0);
       });
