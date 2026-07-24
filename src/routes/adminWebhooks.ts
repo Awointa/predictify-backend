@@ -86,7 +86,11 @@ export function createAdminWebhooksRouter(deps: AdminWebhookDeps): Router {
 
       // 202 Accepted: the fresh delivery is queued, not yet delivered.
       return res.status(202).json({
-        data: { deliveryId: fresh.id, status: fresh.status, attempts: fresh.attempts },
+        data: {
+          deliveryId: fresh.id,
+          status: fresh.status,
+          attempts: fresh.attempts,
+        },
       });
     } catch (e) {
       return next(e);

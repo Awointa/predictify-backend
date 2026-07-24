@@ -17,7 +17,7 @@ import { verifyAccessToken } from "../services/jwtService";
 // Augment Express Request so downstream handlers can read the admin identity
 // without casting.
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+   
   namespace Express {
     interface Request {
       adminAddress?: string;

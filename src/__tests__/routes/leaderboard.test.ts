@@ -59,7 +59,7 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(
         50,
         0,
-        "monthly"
+        "monthly",
       );
       expect(response.body.meta.period).toBe("monthly");
     });
@@ -77,7 +77,7 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(
         50,
         0,
-        "weekly"
+        "weekly",
       );
       expect(response.body.meta.period).toBe("weekly");
     });
@@ -103,7 +103,7 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(
         25,
         0,
-        "all-time"
+        "all-time",
       );
       expect(response.body.meta.limit).toBe(25);
     });
@@ -121,7 +121,7 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(
         50,
         100,
-        "all-time"
+        "all-time",
       );
       expect(response.body.meta.offset).toBe(100);
     });
@@ -151,9 +151,9 @@ describe("Leaderboard Routes", () => {
     });
 
     it("should support refresh parameter with all-time period", async () => {
-      (leaderboardService.getLeaderboardWithRefresh as any).mockResolvedValueOnce([
-        mockLeaderboardEntry,
-      ]);
+      (
+        leaderboardService.getLeaderboardWithRefresh as jest.Mock
+      ).mockResolvedValueOnce([mockLeaderboardEntry]);
 
       const response = await request(app)
         .get("/api/leaderboard")
@@ -163,15 +163,15 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboardWithRefresh).toHaveBeenCalledWith(
         50,
         0,
-        "all-time"
+        "all-time",
       );
       expect(response.body.meta.refresh).toBe(true);
     });
 
     it("should support refresh parameter with monthly period", async () => {
-      (leaderboardService.getLeaderboardWithRefresh as any).mockResolvedValueOnce([
-        mockLeaderboardEntry,
-      ]);
+      (
+        leaderboardService.getLeaderboardWithRefresh as jest.Mock
+      ).mockResolvedValueOnce([mockLeaderboardEntry]);
 
       const response = await request(app)
         .get("/api/leaderboard")
@@ -181,14 +181,14 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboardWithRefresh).toHaveBeenCalledWith(
         50,
         0,
-        "monthly"
+        "monthly",
       );
     });
 
     it("should support refresh parameter with weekly period", async () => {
-      (leaderboardService.getLeaderboardWithRefresh as any).mockResolvedValueOnce([
-        mockLeaderboardEntry,
-      ]);
+      (
+        leaderboardService.getLeaderboardWithRefresh as jest.Mock
+      ).mockResolvedValueOnce([mockLeaderboardEntry]);
 
       const response = await request(app)
         .get("/api/leaderboard")
@@ -198,12 +198,14 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboardWithRefresh).toHaveBeenCalledWith(
         50,
         0,
-        "weekly"
+        "weekly",
       );
     });
 
     it("should return empty array when no results", async () => {
-      (leaderboardService.getLeaderboard as any).mockResolvedValueOnce([]);
+      (leaderboardService.getLeaderboard as jest.Mock).mockResolvedValueOnce(
+        [],
+      );
 
       const response = await request(app).get("/api/leaderboard");
 
@@ -213,8 +215,8 @@ describe("Leaderboard Routes", () => {
     });
 
     it("should handle service errors", async () => {
-      (leaderboardService.getLeaderboard as any).mockRejectedValueOnce(
-        new Error("Database error")
+      (leaderboardService.getLeaderboard as jest.Mock).mockRejectedValueOnce(
+        new Error("Database error"),
       );
 
       const response = await request(app).get("/api/leaderboard");
@@ -235,7 +237,7 @@ describe("Leaderboard Routes", () => {
       expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(
         25,
         50,
-        "all-time"
+        "all-time",
       );
       expect(response.body.meta.limit).toBe(25);
       expect(response.body.meta.offset).toBe(50);
@@ -245,25 +247,26 @@ describe("Leaderboard Routes", () => {
 
   describe("GET /api/leaderboard/user/:stellarAddress", () => {
     it("should return user leaderboard entry with default period", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        mockLeaderboardEntry
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce(mockLeaderboardEntry);
 
-      const response = await request(app)
-        .get(`/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`);
+      const response = await request(app).get(
+        `/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual(mockLeaderboardEntry);
       expect(leaderboardService.getUserLeaderboardEntry).toHaveBeenCalledWith(
         mockLeaderboardEntry.stellar_address,
-        "all-time"
+        "all-time",
       );
     });
 
     it("should accept period parameter for user endpoint", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        mockLeaderboardEntry
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce(mockLeaderboardEntry);
 
       const response = await request(app)
         .get(`/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`)
@@ -272,14 +275,14 @@ describe("Leaderboard Routes", () => {
       expect(response.status).toBe(200);
       expect(leaderboardService.getUserLeaderboardEntry).toHaveBeenCalledWith(
         mockLeaderboardEntry.stellar_address,
-        "monthly"
+        "monthly",
       );
     });
 
     it("should accept weekly period for user endpoint", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        mockLeaderboardEntry
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce(mockLeaderboardEntry);
 
       const response = await request(app)
         .get(`/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`)
@@ -288,7 +291,7 @@ describe("Leaderboard Routes", () => {
       expect(response.status).toBe(200);
       expect(leaderboardService.getUserLeaderboardEntry).toHaveBeenCalledWith(
         mockLeaderboardEntry.stellar_address,
-        "weekly"
+        "weekly",
       );
     });
 
@@ -301,41 +304,48 @@ describe("Leaderboard Routes", () => {
     });
 
     it("should return 404 when user not found", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        null
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce(null);
 
-      const response = await request(app)
-        .get("/api/leaderboard/user/UNKNOWN_ADDRESS");
+      const response = await request(app).get(
+        "/api/leaderboard/user/UNKNOWN_ADDRESS",
+      );
 
       expect(response.status).toBe(404);
       expect(response.body.error.code).toBe("not_found");
     });
 
     it("should handle service errors for user endpoint", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockRejectedValueOnce(
-        new Error("Database error")
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockRejectedValueOnce(new Error("Database error"));
 
-      const response = await request(app)
-        .get(`/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`);
+      const response = await request(app).get(
+        `/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`,
+      );
 
       expect(response.status).toBe(500);
     });
 
     it("should work with different stellar addresses", async () => {
-      const altAddress = "GBTCHKHMWCS5TOX2LAD4DAEKTC3UFSFXQ2MRLED5EYOA34RH4ZX72JK";
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        { ...mockLeaderboardEntry, stellar_address: altAddress }
-      );
+      const altAddress =
+        "GBTCHKHMWCS5TOX2LAD4DAEKTC3UFSFXQ2MRLED5EYOA34RH4ZX72JK";
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce({
+        ...mockLeaderboardEntry,
+        stellar_address: altAddress,
+      });
 
-      const response = await request(app)
-        .get(`/api/leaderboard/user/${altAddress}`);
+      const response = await request(app).get(
+        `/api/leaderboard/user/${altAddress}`,
+      );
 
       expect(response.status).toBe(200);
       expect(leaderboardService.getUserLeaderboardEntry).toHaveBeenCalledWith(
         altAddress,
-        "all-time"
+        "all-time",
       );
     });
   });
@@ -368,12 +378,13 @@ describe("Leaderboard Routes", () => {
     });
 
     it("should return data as object in user response", async () => {
-      (leaderboardService.getUserLeaderboardEntry as any).mockResolvedValueOnce(
-        mockLeaderboardEntry
-      );
+      (
+        leaderboardService.getUserLeaderboardEntry as jest.Mock
+      ).mockResolvedValueOnce(mockLeaderboardEntry);
 
-      const response = await request(app)
-        .get(`/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`);
+      const response = await request(app).get(
+        `/api/leaderboard/user/${mockLeaderboardEntry.stellar_address}`,
+      );
 
       expect(typeof response.body.data).toBe("object");
       expect(Array.isArray(response.body.data)).toBe(false);
