@@ -463,8 +463,7 @@ export async function runFraudScan(
 // ──────────────────────────────────────────────────────────────────────────────
 
 export class DrizzleFraudRepo implements FraudRepo {
-  // Use `any` to remain compatible with the codebase's drizzle helper typing
-  // (other services here do the same — see DrizzleMarketResolutionRepo).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly db: any = defaultDb) {}
 
   async loadRecentPredictions(opts: {
