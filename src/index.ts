@@ -15,6 +15,9 @@ import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
 import { usersRouter } from "./routes/users";
 import { userPortfolioRouter } from "./routes/users/portfolio";
+import { devicesRouter } from "./routes/devices";
+import { adminFeatureFlagsRouter } from "./routes/admin/feature-flags";
+import { adminUsersRouter } from "./routes/adminUsers";
 import { leaderboardRouter } from "./routes/leaderboard";
 import { createDocsRouter } from "./routes/docs";
 import { devicesRouter } from "./routes/devices";
@@ -133,8 +136,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/me/devices", devicesRouter);
   app.use("/api/me/sessions", sessionsRouter);
   app.use("/api/admin/audit", adminAuditRouter);
+  app.use("/api/admin/users", adminUsersRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
-  app.use("/api/admin/plugins", adminPluginsRouter);
+  app.use("/api/admin/feature-flags", adminFeatureFlagsRouter);
 
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
@@ -179,6 +183,7 @@ if (require.main === module) {
       reconciliationWorker.start();
       probeHandle = startIndexerHealthProbe();
 
+      const probeHandle = startIndexerHealthProbe();
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
         logger.info(`Swagger UI available at http://localhost:${env.PORT}/docs`);

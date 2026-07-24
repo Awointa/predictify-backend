@@ -268,6 +268,7 @@ const MarketSearchResult = z
 registry.registerPath({
   method: "get",
   path: "/api/markets/recommendations",
+  operationId: "getMarketRecommendations",
   tags: ["Markets"],
   summary: "Get personalized market recommendations",
   security: [{ bearerAuth: [] }],
@@ -590,6 +591,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/markets/featured",
+  operationId: "getFeaturedMarkets",
   tags: ["Markets"],
   summary: "List currently featured markets for the home page",
   request: {
@@ -618,6 +620,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/admin/markets/{id}/feature",
+  operationId: "featureAdminMarket",
   tags: ["Admin"],
   summary: "Feature a market on the home page (admin only, idempotent)",
   security: [{ bearerAuth: [] }],
@@ -657,6 +660,7 @@ registry.registerPath({
 registry.registerPath({
   method: "delete",
   path: "/api/admin/markets/{id}/feature",
+  operationId: "unfeatureAdminMarket",
   tags: ["Admin"],
   summary: "Unfeature a market from the home page (admin only, idempotent)",
   security: [{ bearerAuth: [] }],
@@ -684,6 +688,219 @@ registry.registerPath({
     },
     404: {
       description: "Market not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+const FeatureFlag = z
+  .object({
+    key: z.string(),
+    enabled: z.boolean(),
+    description: z.string().nullable(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("FeatureFlag");
+
+const FeatureFlagListResponse = z
+  .object({ data: z.array(FeatureFlag) })
+  .openapi("FeatureFlagListResponse");
+
+const FeatureFlagResponse = z
+  .object({ data: FeatureFlag })
+  .openapi("FeatureFlagResponse");
+
+const CreateFeatureFlagRequest = z
+  .object({
+    key: z.string(),
+    enabled: z.boolean(),
+    description: z.string().max(280).nullable().optional(),
+  })
+  .openapi("CreateFeatureFlagRequest");
+
+const UpdateFeatureFlagRequest = z
+  .object({
+    enabled: z.boolean().optional(),
+    description: z.string().max(280).nullable().optional(),
+  })
+  .openapi("UpdateFeatureFlagRequest");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/feature-flags",
+  operationId: "listAdminFeatureFlags",
+  tags: ["Admin"],
+  summary: "List configured feature flags",
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "List of feature flags",
+      content: {
+        "application/json": { schema: FeatureFlagListResponse },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/feature-flags",
+  operationId: "createAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Create a new feature flag",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: { content: { "application/json": { schema: CreateFeatureFlagRequest } } },
+  },
+  responses: {
+    201: {
+      description: "Feature flag created",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    409: {
+      description: "Feature flag already exists",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "getAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Get a configured feature flag",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ key: z.string().min(1).max(64) }) },
+  responses: {
+    200: {
+      description: "Feature flag details",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Invalid feature flag key",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "updateAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Update a feature flag",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ key: z.string().min(1).max(64) }),
+    body: { content: { "application/json": { schema: UpdateFeatureFlagRequest } } },
+  },
+  responses: {
+    200: {
+      description: "Feature flag updated",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "deleteAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Delete a feature flag",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ key: z.string().min(1).max(64) }) },
+  responses: {
+    204: { description: "Feature flag deleted" },
+    400: {
+      description: "Invalid feature flag key",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
       content: { "application/json": { schema: ErrorBody } },
     },
     429: {
@@ -956,6 +1173,78 @@ registry.registerPath({
   },
 });
 
+const AdminUserView = z
+  .object({
+    user: z
+      .object({
+        id: z.string(),
+        stellarAddress: z.string(),
+        createdAt: z.string().datetime(),
+      })
+      .nullable(),
+    predictions: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        outcome: z.string(),
+        amount: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    claims: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        amount: z.string(),
+        status: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    disputes: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        reason: z.string(),
+        status: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    totals: z.object({
+      predictions: z.number().int(),
+      claims: z.number().int(),
+      disputes: z.number().int(),
+    }),
+  })
+  .openapi("AdminUserView");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/users/{address}",
+  operationId: "getAdminUser",
+  tags: ["Admin"],
+  summary: "Get aggregated user data for admin support",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ address: z.string() }) },
+  responses: {
+    200: {
+      description: "Admin user view",
+      content: { "application/json": { schema: z.object({ data: AdminUserView }) } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "User not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/admin/audit ────────────────────────────────────────────────────────
 
 const AuditEntry = z
@@ -1019,6 +1308,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/admin/audit/export",
+  operationId: "exportAdminAuditLog",
   tags: ["Admin"],
   summary: "Export audit log as NDJSON",
   security: [{ bearerAuth: [] }],

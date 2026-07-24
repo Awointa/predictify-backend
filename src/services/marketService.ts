@@ -2,7 +2,7 @@
 import { invalidateMarketCache } from "../cache/marketsCache";
 import { db, getDb } from "../db/client";
 import { markets, marketAuditLog } from "../db/schema";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { emitMarketEvent, LogEvent } from "../logging/events";
 
 export interface Market {
@@ -65,6 +65,31 @@ export async function listMarkets(
       r.resolutionTime instanceof Date
         ? r.resolutionTime.toISOString()
         : r.resolutionTime,
+  }));
+}
+
+export async function listUpcomingMarkets(options: { limit?: number } = {}): Promise<any[]> {
+  const limit = options.limit ?? 50;
+
+  const rows = await getDb()
+    .select({
+      id: markets.id,
+      question: markets.question,
+      status: markets.status,
+      resolutionTime: markets.resolutionTime,
+    })
+    .from(markets)
+    .where(and(eq(markets.archived, false), eq(markets.status, "upcoming")))
+    .orderBy(asc(markets.resolutionTime), asc(markets.id))
+    .limit(limit);
+
+  if (!Array.isArray(rows)) {
+    throw new Error("Unexpected response from database: rows is not an array");
+  }
+
+  return rows.map((r: any) => ({
+    ...r,
+    resolutionTime: r.resolutionTime instanceof Date ? r.resolutionTime.toISOString() : r.resolutionTime,
   }));
 }
 

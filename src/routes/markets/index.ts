@@ -1,39 +1,33 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from "express";
-import {
-  listMarkets,
-  listUpcomingMarkets,
-  getMarketById,
-  updateMarket,
-  VersionConflictError,
-} from "../services/marketService";
-import { searchMarkets } from "../repositories/marketRepository";
-import { requireAdmin, AuthenticatedRequest } from "../middleware/auth";
-import { rateLimitAnon } from "../middleware/rateLimitAnon";
-import { listFeaturedMarkets } from "../services/marketFeatureService";
+import { listMarkets, listUpcomingMarkets, getMarketById, updateMarket, VersionConflictError } from "../../services/marketService";
+import { searchMarkets } from "../../repositories/marketRepository";
+import { requireAdmin, AuthenticatedRequest } from "../../middleware/auth";
+import { rateLimitAnon } from "../../middleware/rateLimitAnon";
+import { listFeaturedMarkets } from "../../services/marketFeatureService";
 import { z } from "zod";
 import { logger } from "../../config/logger";
-// import { recommendationsRouter } from "./recommendations";
+import { recommendationsRouter } from "./recommendations";
+import { trendingRouter } from "./trending";
+import { marketAuditRouter } from "../marketAudit";
+import { disputesRouter } from "../disputes";
 
 export const marketsRouter = Router();
 
-import { disputesRouter } from "../disputes";
-marketsRouter.use("/:id/disputes", disputesRouter);
-
-// Per-market prediction count: GET /api/markets/:id/prediction-count (#306)
-marketsRouter.use("/:id/prediction-count", predictionCountRouter);
-
 marketsRouter.use(rateLimitAnon);
+marketsRouter.use("/recommendations", recommendationsRouter);
 marketsRouter.use("/trending", trendingRouter);
 marketsRouter.use("/:id/recommendations", recommendationsRouter);
 
-const patchMarketSchema = z
-  .object({
-    question: z.string().optional(),
-    metadata: z.any().optional(),
-    expectedVersion: z.number().int().nonnegative(),
-  })
-  .strict();
+// Per-market audit log: GET /api/markets/:id/audit (#216)
+marketsRouter.use("/:id/audit", marketAuditRouter);
+marketsRouter.use("/:id/disputes", disputesRouter);
+
+const patchMarketSchema = z.object({
+  question: z.string().optional(),
+  metadata: z.any().optional(),
+  expectedVersion: z.number().int().nonnegative(),
+}).strict();
 
 marketsRouter.get("/search", async (req, res, next) => {
   const reqId = String((req as any).id ?? "anon");
