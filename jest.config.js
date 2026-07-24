@@ -49,9 +49,15 @@ module.exports = {
   testMatch: ["**/tests/**/*.test.ts"],
   globals: {
     "ts-jest": {
-      // Disable type-checking during tests for speed; tsc handles type safety.
+      // Use the test-specific tsconfig so ts-jest can find both src/ and
+      // tests/ files, and so unused-parameter errors in mock stubs don't
+      // block the test suite.
+      tsconfig: "<rootDir>/tsconfig.test.json",
+      // Disable full type-checking during test runs — tsc in CI handles
+      // that separately.  This lets ts-jest transpile files that have
+      // pre-existing type errors in unrelated modules without blocking
+      // the test suite.
       diagnostics: false,
-      isolatedModules: true,
     },
   },
   collectCoverageFrom: [

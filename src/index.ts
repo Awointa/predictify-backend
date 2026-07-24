@@ -37,6 +37,7 @@ import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
+import { devicesRouter } from "./routes/devices";
 import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
@@ -63,6 +64,12 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
+
+  // Disable Express's built-in ETag generation — we manage strong ETags
+  // explicitly in src/middleware/etag.ts for the resources that need them.
+  // Leaving Express's weak ETags enabled would add spurious `W/"..."` headers
+  // on every JSON response, including error envelopes.
+  app.set("etag", false);
 
   if (env.TRUST_PROXY) {
     app.set("trust proxy", true);
@@ -149,7 +156,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
-  const probeHandle = startIndexerHealthProbe();
+  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -169,7 +176,7 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
-      const probeHandle = startIndexerHealthProbe();
+      probeHandle = startIndexerHealthProbe();
 
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");

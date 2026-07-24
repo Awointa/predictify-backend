@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from "express";
-import { listMarkets, getMarketById, updateMarket, VersionConflictError } from "../../services/marketService";
+import { listMarkets, listUpcomingMarkets, getMarketById, updateMarket, VersionConflictError } from "../../services/marketService";
 import { searchMarkets } from "../../repositories/marketRepository";
 import { requireAdmin, AuthenticatedRequest } from "../../middleware/auth";
 import { rateLimitAnon } from "../../middleware/rateLimitAnon";
@@ -9,7 +9,8 @@ import { z } from "zod";
 import { logger } from "../../config/logger";
 import { recommendationsRouter } from "./recommendations";
 import { trendingRouter } from "./trending";
-import { predictionCountRouter } from "./prediction-count";
+import { marketAuditRouter } from "../marketAudit";
+import { conditionalGet } from "../../middleware/etag";
 
 export const marketsRouter = Router();
 
@@ -114,7 +115,8 @@ marketsRouter.get("/", async (req, res, next) => {
     }
 
     logger.debug({ reqId, correlationId: reqId, limit: req.query.limit }, "markets_list_fetching");
-    const data = await listMarkets();
+    const limit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
+    const data = await listMarkets({ limit });
 
     logger.info({ reqId, correlationId: reqId, count: data.length }, "markets_list_success");
     return res.json({ data });
@@ -187,6 +189,9 @@ marketsRouter.get("/:id", async (req, res, next) => {
 
     if (!market) {
       logger.warn({ reqId, correlationId: reqId, marketId }, "markets_get_not_found");
+      // RFC 7232: ETags are only meaningful on 2xx responses.
+      // Remove the header Express's built-in etag middleware may have set.
+      res.removeHeader("ETag");
       return res.status(404).json({
         error: {
           code: "not_found",
@@ -194,6 +199,14 @@ marketsRouter.get("/:id", async (req, res, next) => {
           correlationId: reqId,
         },
       });
+    }
+
+    // Compute a strong ETag from the full market payload and handle
+    // If-None-Match conditional requests.  Returns true when a 304 was
+    // already sent; in that case we must not write any further response.
+    if (conditionalGet(market, req, res)) {
+      logger.info({ reqId, correlationId: reqId, marketId }, "markets_get_not_modified");
+      return;
     }
 
     logger.info({ reqId, correlationId: reqId, marketId }, "markets_get_success");

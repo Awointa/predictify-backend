@@ -82,6 +82,9 @@ export async function getMarketById(id: string): Promise<any | null> {
       question: markets.question,
       status: markets.status,
       resolutionTime: markets.resolutionTime,
+      // version is included so that every PATCH increments the ETag,
+      // ensuring conditional-GET clients never serve stale data.
+      version: markets.version,
     })
     .from(markets)
     .where(eq(markets.id, id))
