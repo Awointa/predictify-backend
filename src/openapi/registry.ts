@@ -296,7 +296,39 @@ registry.registerPath({
     200: {
       description: "Array of markets",
       content: {
-        "application/json": { schema: z.object({ data: z.array(Market) }) },
+        "application/json": {
+          schema: z.object({ data: z.array(Market) }),
+          examples: {
+            default: {
+              value: {
+                data: [
+                  {
+                    id: "market-001",
+                    question: "Will the US win the 2026 FIFA World Cup?",
+                    status: "active",
+                    metadata: {
+                      category: "sports",
+                      resolutionSource: "official",
+                    },
+                    version: 1,
+                    createdAt: "2026-01-10T12:00:00.000Z",
+                  },
+                  {
+                    id: "market-002",
+                    question: "Will Stellar launch a new protocol upgrade in 2026?",
+                    status: "active",
+                    metadata: {
+                      category: "technology",
+                      resolutionSource: "community",
+                    },
+                    version: 2,
+                    createdAt: "2026-02-14T07:30:00.000Z",
+                  },
+                ],
+              },
+            },
+          },
+        },
       },
     },
   },
@@ -365,7 +397,28 @@ registry.registerPath({
   responses: {
     200: {
       description: "Market",
-      content: { "application/json": { schema: z.object({ data: Market }) } },
+      content: {
+        "application/json": {
+          schema: z.object({ data: Market }),
+          examples: {
+            default: {
+              value: {
+                data: {
+                  id: "market-001",
+                  question: "Will the US win the 2026 FIFA World Cup?",
+                  status: "active",
+                  metadata: {
+                    category: "sports",
+                    resolutionSource: "official",
+                  },
+                  version: 1,
+                  createdAt: "2026-01-10T12:00:00.000Z",
+                },
+              },
+            },
+          },
+        },
+      },
     },
     404: {
       description: "Not found",
