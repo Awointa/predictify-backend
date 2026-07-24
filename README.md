@@ -33,15 +33,47 @@ npm run dev                  # predev hook re-runs check-env automatically
 
 Once running:
 
-- **Swagger UI** → http://localhost:3000/docs *(non-production only; set `ENABLE_DOCS=true` to enable in production)*
-- **OpenAPI JSON** → http://localhost:3000/openapi.json *(always available)*
+- **Swagger UI** → http://localhost:3001/docs *(non-production only; set `ENABLE_DOCS=true` to enable in production)*
+- **OpenAPI JSON** → http://localhost:3001/openapi.json *(always available)*
 - **Audit export** → `GET /api/admin/audit/export` streams admin audit logs as `application/x-ndjson`
 
+
+## Health Endpoints
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /health` | None | Liveness check — returns `{ "status": "ok" }` immediately. Use this to verify the process is up. |
+| `GET /healthz/dependencies` | None | Shallow dependency probe — Postgres, Soroban RPC, Horizon, webhook queue (Redis). Cached for 5 s. Returns 200/207/503. |
+| `GET /api/health/ready` | None | **Deep readiness check** — runs four parallel probes with 1-second timeouts each. Returns 200 when ready, 503 when unready. |
+
+### `GET /api/health/ready` response
+
+```json
+{
+  "status": "ready",
+  "correlationId": "<uuid>",
+  "checkedAt": "2026-07-24T12:00:00.000Z",
+  "checks": {
+    "db":         { "status": "pass", "durationMs": 4,  "message": "Database connection healthy" },
+    "sorobanRpc": { "status": "pass", "durationMs": 18, "message": "Soroban RPC healthy" },
+    "indexerLag": { "status": "pass", "durationMs": 22, "message": "Indexer lag healthy: 12 ≤ 200 ledgers" },
+    "queue":      { "status": "pass", "durationMs": 2,  "message": "Queue (Redis) healthy" }
+  }
+}
+```
+
+- `status` is `"ready"` only when **all four** probes pass; otherwise `"unready"`.
+- HTTP 200 → ready, HTTP 503 → unready.
+- Pass `x-correlation-id` header to correlate log entries with the request.
+- `READINESS_MAX_LAG_LEDGERS` (env, default `200`) controls the indexer lag threshold.
+- Not cached — orchestrators (Kubernetes, ECS) get a fresh signal on every poll.
+
+See [docs/health-ready.md](docs/health-ready.md) for full runbook.
 
 ## Request body size limits
 
 - Default JSON request body limit: `256kb`.
-- Route-level overrides are applied in middleware using `createBodyLimitMiddleware(...)`.
+- Route-level overrides are applied in middleware using `createBodySizeLimitMiddleware(...)` from `src/middleware/bodySize.ts`.
 - Webhook routes may opt into a larger limit of `1mb`.
 - Requests exceeding the configured limit return HTTP `413` with the standard error envelope, including correlation and request IDs.
 
@@ -107,7 +139,7 @@ This starter is intentionally minimal. The full backlog is tracked in GitHub Iss
 - Predictions + claims endpoints
 - Leaderboards & user profiles
 - Webhook delivery + DLQ
-- Observability (metrics, tracing, /readyz with deep checks)
+- Observability (metrics, tracing, /readyz with deep checks ✅ `/api/health/ready`)
 - OpenAPI spec + contract tests
 
 ## Auth Refresh Flow

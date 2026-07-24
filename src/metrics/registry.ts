@@ -1,4 +1,4 @@
-import { Registry, Counter, Histogram, Gauge, collectDefaultMetrics } from "prom-client";
+import { Registry, Counter, Histogram, collectDefaultMetrics } from "prom-client";
 
 export const register = new Registry();
 
@@ -50,20 +50,21 @@ export const settleConfirmerFailedTotal = new Counter({
   registers: [register],
 });
 
-export const indexerLagLedgers = new Gauge({
-  name: "indexer_lag_ledgers",
-  help: "Current indexer lag in number of ledgers",
+export const signupAnomalyScansTotal = new Counter({
+  name: "signup_anomaly_scans_total",
+  help: "Total number of signup-rate anomaly scans completed",
   registers: [register],
 });
 
-export const indexerGapDetectedTotal = new Counter({
-  name: "indexer_gap_detected_total",
-  help: "Total number of indexer gaps detected",
-  labelNames: ["from", "to"] as const,
+export const signupAnomaliesDetectedTotal = new Counter({
+  name: "signup_anomalies_detected_total",
+  help: "Total number of anomalous signup buckets detected, segmented by severity (warning, critical)",
+  labelNames: ["severity"] as const,
   registers: [register],
 });
 
-export function resetMetrics(): void {
-  register.clear();
-}
-
+export const signupAnomalyTopScore = new Gauge({
+  name: "signup_anomaly_top_score",
+  help: "Highest modified z-score observed in the most recent signup-rate anomaly scan",
+  registers: [register],
+});

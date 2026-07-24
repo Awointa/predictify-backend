@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { reconcileMarket } from "../../services/reconciliationService";
 import { REQUEST_ID_HEADER } from "../../lib/http";
+import { RouteErrorFactory } from "../../errors";
 
 const paramsSchema = z.object({
   id: z.string().trim().min(1).max(255),
@@ -27,13 +28,7 @@ export function createAdminReconciliationRouter(): Router {
       const requestId = requestIdOf({ id: (req as { id?: unknown }).id });
 
       if (!parsed.success) {
-        return res.status(400).json({
-          error: {
-            code: "validation_error",
-            details: parsed.error.issues,
-            requestId,
-          },
-        });
+        throw RouteErrorFactory.validation("Invalid market ID");
       }
 
       const result = await reconcileMarket({

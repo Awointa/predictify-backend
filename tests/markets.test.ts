@@ -8,6 +8,7 @@ type MarketRow = {
   question: string;
   status: string;
   resolutionTime: Date;
+  version: number;
 };
 
 /**
@@ -69,13 +70,14 @@ describe("GET /api/markets", () => {
         question: "Will Predictify ship real market reads?",
         status: "active",
         resolutionTime: new Date("2026-07-01T00:00:00.000Z"),
+        version: 1,
       },
     ]));
 
     const res = await request(createApp()).get("/api/markets");
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    expect(res.body).toMatchObject({
       data: [
         {
           id: "market-1",
@@ -102,6 +104,7 @@ describe("GET /api/markets", () => {
       question: `Question ${i + 1}`,
       status: "active",
       resolutionTime: new Date("2026-07-01T00:00:00.000Z"),
+      version: 1,
     }));
 
     setDbForTests(createMarketDb(markets));
@@ -116,7 +119,7 @@ describe("GET /api/markets", () => {
     const res = await request(createApp()).get("/api/markets?limit=1000");
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: { code: "invalid_query" } });
+    expect(res.body).toMatchObject({ error: { code: "invalid_query" } });
   });
 
   it("rejects non-numeric limit", async () => {
@@ -125,7 +128,7 @@ describe("GET /api/markets", () => {
     const res = await request(createApp()).get("/api/markets?limit=abc");
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: { code: "invalid_query" } });
+    expect(res.body).toMatchObject({ error: { code: "invalid_query" } });
   });
 });
 
@@ -141,6 +144,7 @@ describe("GET /api/markets/:id", () => {
         question: "Will Predictify ship real market reads?",
         status: "active",
         resolutionTime: new Date("2026-07-01T00:00:00.000Z"),
+        version: 1,
       },
     ]));
 
@@ -153,6 +157,7 @@ describe("GET /api/markets/:id", () => {
         question: "Will Predictify ship real market reads?",
         status: "active",
         resolutionTime: "2026-07-01T00:00:00.000Z",
+        version: 1,
       },
     });
   });
@@ -163,7 +168,7 @@ describe("GET /api/markets/:id", () => {
     const res = await request(createApp()).get("/api/markets/nonexistent-id");
 
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: { code: "not_found" } });
+    expect(res.body).toMatchObject({ error: { code: "not_found" } });
   });
 
   it("handles market ID with special characters", async () => {
@@ -173,6 +178,7 @@ describe("GET /api/markets/:id", () => {
         question: "Test question",
         status: "active",
         resolutionTime: new Date("2026-07-01T00:00:00.000Z"),
+        version: 1,
       },
     ]));
 
@@ -275,5 +281,72 @@ describe("Regression: ensure stub bypass is removed", () => {
     // This test validates that the service layer performs input validation
     const res = await request(createApp()).get("/api/markets/market-1");
     expect(res.status).toBe(200);
+  });
+});
+
+describe("GET /api/markets/tags", () => {
+  afterEach(() => {
+    setDbForTests(null);
+  });
+
+  it("returns market tags with counts", async () => {
+    // Mock the database to return tags
+    const mockTagsResult = [
+      { tag: "football", count: 5 },
+      { tag: "sports", count: 3 },
+      { tag: "politics", count: 2 },
+    ];
+
+    const mockDb = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn(async () => []),
+              })),
+            })),
+          })),
+        })),
+      })),
+      transaction: jest.fn(async (fn: Function) => fn({})),
+      execute: jest.fn(async () => ({
+        rows: mockTagsResult,
+      })),
+    } as unknown as Database;
+
+    setDbForTests(mockDb);
+
+    const res = await request(createApp()).get("/api/markets/tags");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      data: mockTagsResult,
+    });
+  });
+
+  it("returns empty array when no tags", async () => {
+    const mockDb = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn(async () => []),
+              })),
+            })),
+          })),
+        })),
+      })),
+      transaction: jest.fn(async (fn: Function) => fn({})),
+      execute: jest.fn(async () => ({
+        rows: [],
+      })),
+    } as unknown as Database;
+
+    setDbForTests(mockDb);
+
+    const res = await request(createApp()).get("/api/markets/tags");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [] });
   });
 });

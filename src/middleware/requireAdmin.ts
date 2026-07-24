@@ -13,11 +13,12 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "../services/jwtService";
+import { logger } from "../config/logger";
 
 // Augment Express Request so downstream handlers can read the admin identity
 // without casting.
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+   
   namespace Express {
     interface Request {
       adminAddress?: string;
@@ -43,14 +44,17 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     const payload = verifyAccessToken(token) as AdminTokenPayload;
 
     if (payload.role !== "admin" || !payload.sub) {
+      logger.info({ tokenKid: undefined, role: payload.role, sub: payload.sub }, "requireAdmin_forbidden");
       res.status(403).json({ error: { code: "forbidden" } });
       return;
     }
 
     req.adminAddress = payload.sub;
+    logger.info({ adminAddress: req.adminAddress }, "requireAdmin_ok");
     next();
   } catch {
     // Covers expired, malformed, and wrong-key tokens
+    logger.info({ err: "verify_failed" }, "requireAdmin_verify_failed");
     res.status(403).json({ error: { code: "forbidden" } });
   }
 }

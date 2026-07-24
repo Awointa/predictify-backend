@@ -326,6 +326,31 @@ export const notificationPreferences = pgTable(
   }),
 );
 
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    data: jsonb("data").notNull().default({}),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    notificationsUserIdIdx: index("notifications_user_id_idx").on(t.userId),
+    notificationsUserIdReadAtIdx: index("notifications_user_id_read_at_idx").on(
+      t.userId,
+      t.readAt,
+    ),
+  }),
+);
+
 export const auditLogs = pgTable(
   "audit_logs",
   {
@@ -346,6 +371,26 @@ export const auditLogs = pgTable(
     auditLogsCreatedAtIdx: index("audit_logs_created_at_idx").on(t.createdAt),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Plugins (admin-managed CRUD)
+// ---------------------------------------------------------------------------
+
+export const plugins = pgTable("plugins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  enabled: boolean("enabled").notNull().default(true),
+  config: jsonb("config").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Plugin = typeof plugins.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Feature Flags
@@ -396,3 +441,6 @@ export const schemaVersions = pgTable(
 
 export type SchemaVersion = typeof schemaVersions.$inferSelect;
 export type NewSchemaVersion = typeof schemaVersions.$inferInsert;
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

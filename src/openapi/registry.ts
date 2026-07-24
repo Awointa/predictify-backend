@@ -268,6 +268,7 @@ const MarketSearchResult = z
 registry.registerPath({
   method: "get",
   path: "/api/markets/recommendations",
+  operationId: "getMarketRecommendations",
   tags: ["Markets"],
   summary: "Get personalized market recommendations",
   security: [{ bearerAuth: [] }],
@@ -325,6 +326,31 @@ registry.registerPath({
     400: {
       description: "Missing query parameter",
       content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/markets/tags",
+  operationId: "getMarketTags",
+  tags: ["Markets"],
+  summary: "Get market tags with counts",
+  responses: {
+    200: {
+      description: "Market tags with counts",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.array(
+              z.object({
+                tag: z.string(),
+                count: z.number(),
+              }),
+            ),
+          }),
+        },
+      },
     },
   },
 });
@@ -411,6 +437,46 @@ registry.registerPath({
   },
 });
 
+// ── /api/markets/{id}/prediction-count ───────────────────────────────────────
+
+const PredictionCountResponse = z
+  .object({
+    data: z.object({
+      marketId: z.string(),
+      count: z.number().int().nonnegative(),
+      computedAt: z.string().datetime(),
+      cached: z.boolean(),
+    }),
+  })
+  .openapi("PredictionCountResponse");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/markets/{id}/prediction-count",
+  operationId: "getMarketPredictionCount",
+  tags: ["Markets"],
+  summary: "Get total prediction count for a market",
+  description:
+    "Returns the total number of predictions placed on the given market. " +
+    "Results are cached in Redis for 60 seconds. The `cached` field " +
+    "indicates whether the value came from the cache.",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      description: "Prediction count",
+      content: { "application/json": { schema: PredictionCountResponse } },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    404: {
+      description: "Market not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/leaderboard ─────────────────────────────────────────────────────────
 
 const LeaderboardEntry = z
@@ -475,11 +541,57 @@ registry.registerPath({
   },
 });
 
+// ── /api/rate-limit/status ──────────────────────────────────────────────────────
+
+const AnonRateLimitStatus = z
+  .object({
+    data: z.object({
+      type: z.literal("anonymous"),
+      clientIp: z.string(),
+      limit: z.number().int(),
+      used: z.number().int(),
+      remaining: z.number().int(),
+      windowMs: z.number().int(),
+      resetAt: z.string().datetime(),
+    }),
+  })
+  .openapi("AnonRateLimitStatus");
+
+const AuthRateLimitStatus = z
+  .object({
+    data: z.object({
+      type: z.literal("authenticated"),
+      limit: z.number().int(),
+      windowMs: z.number().int(),
+      bypasses: z.literal(true),
+    }),
+  })
+  .openapi("AuthRateLimitStatus");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/rate-limit/status",
+  operationId: "getRateLimitStatus",
+  tags: ["Rate Limiting"],
+  summary: "Get the current anonymous rate-limit status for the caller",
+  responses: {
+    200: {
+      description: "Rate-limit status (type differs for anonymous vs authenticated callers)",
+      content: {
+        "application/json": {
+          schema: z.union([AnonRateLimitStatus, AuthRateLimitStatus]),
+        },
+      },
+    },
+  },
+});
+
 // ── /api/markets/featured ────────────────────────────────────────────────────
 
 registry.registerPath({
   method: "get",
   path: "/api/markets/featured",
+  operationId: "getFeaturedMarkets",
   tags: ["Markets"],
   summary: "List currently featured markets for the home page",
   request: {
@@ -508,6 +620,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/admin/markets/{id}/feature",
+  operationId: "featureAdminMarket",
   tags: ["Admin"],
   summary: "Feature a market on the home page (admin only, idempotent)",
   security: [{ bearerAuth: [] }],
@@ -547,6 +660,7 @@ registry.registerPath({
 registry.registerPath({
   method: "delete",
   path: "/api/admin/markets/{id}/feature",
+  operationId: "unfeatureAdminMarket",
   tags: ["Admin"],
   summary: "Unfeature a market from the home page (admin only, idempotent)",
   security: [{ bearerAuth: [] }],
@@ -583,6 +697,219 @@ registry.registerPath({
   },
 });
 
+const FeatureFlag = z
+  .object({
+    key: z.string(),
+    enabled: z.boolean(),
+    description: z.string().nullable(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("FeatureFlag");
+
+const FeatureFlagListResponse = z
+  .object({ data: z.array(FeatureFlag) })
+  .openapi("FeatureFlagListResponse");
+
+const FeatureFlagResponse = z
+  .object({ data: FeatureFlag })
+  .openapi("FeatureFlagResponse");
+
+const CreateFeatureFlagRequest = z
+  .object({
+    key: z.string(),
+    enabled: z.boolean(),
+    description: z.string().max(280).nullable().optional(),
+  })
+  .openapi("CreateFeatureFlagRequest");
+
+const UpdateFeatureFlagRequest = z
+  .object({
+    enabled: z.boolean().optional(),
+    description: z.string().max(280).nullable().optional(),
+  })
+  .openapi("UpdateFeatureFlagRequest");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/feature-flags",
+  operationId: "listAdminFeatureFlags",
+  tags: ["Admin"],
+  summary: "List configured feature flags",
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: "List of feature flags",
+      content: {
+        "application/json": { schema: FeatureFlagListResponse },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/feature-flags",
+  operationId: "createAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Create a new feature flag",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: { content: { "application/json": { schema: CreateFeatureFlagRequest } } },
+  },
+  responses: {
+    201: {
+      description: "Feature flag created",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    409: {
+      description: "Feature flag already exists",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "getAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Get a configured feature flag",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ key: z.string().min(1).max(64) }) },
+  responses: {
+    200: {
+      description: "Feature flag details",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Invalid feature flag key",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "updateAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Update a feature flag",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ key: z.string().min(1).max(64) }),
+    body: { content: { "application/json": { schema: UpdateFeatureFlagRequest } } },
+  },
+  responses: {
+    200: {
+      description: "Feature flag updated",
+      content: {
+        "application/json": { schema: FeatureFlagResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/admin/feature-flags/{key}",
+  operationId: "deleteAdminFeatureFlag",
+  tags: ["Admin"],
+  summary: "Delete a feature flag",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ key: z.string().min(1).max(64) }) },
+  responses: {
+    204: { description: "Feature flag deleted" },
+    400: {
+      description: "Invalid feature flag key",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Feature flag not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/notifications ──────────────────────────────────────────────────────
 
 const NotificationChannel = z
@@ -604,6 +931,31 @@ const NotificationPreferencesResponse = z
 const PatchNotificationPreferencesRequest = z
   .object({ preferences: z.array(NotificationPreference).min(1) })
   .openapi("PatchNotificationPreferencesRequest");
+
+const NotificationId = z.string().uuid().openapi("NotificationId");
+
+const MarkNotificationsReadRequest = z
+  .object({
+    notificationIds: z.array(NotificationId).optional(),
+    markAllAsRead: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (data) => (data.notificationIds?.length ?? 0) > 0 || data.markAllAsRead === true,
+    {
+      message: "Either notificationIds (non-empty array) or markAllAsRead=true is required",
+      path: ["notificationIds"],
+    },
+  )
+  .openapi("MarkNotificationsReadRequest");
+
+const MarkNotificationsReadResponse = z
+  .object({
+    data: z.object({
+      updatedCount: z.number().int().nonnegative(),
+    }),
+  })
+  .openapi("MarkNotificationsReadResponse");
 
 registry.registerPath({
   method: "get",
@@ -645,6 +997,38 @@ registry.registerPath({
       description: "Updated notification preferences",
       content: {
         "application/json": { schema: NotificationPreferencesResponse },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/notifications/mark-read",
+  operationId: "markNotificationsRead",
+  tags: ["Notifications"],
+  summary: "Mark notifications as read for the authenticated user",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: MarkNotificationsReadRequest },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Notifications marked as read",
+      content: {
+        "application/json": { schema: MarkNotificationsReadResponse },
       },
     },
     400: {
@@ -846,6 +1230,78 @@ registry.registerPath({
   },
 });
 
+const AdminUserView = z
+  .object({
+    user: z
+      .object({
+        id: z.string(),
+        stellarAddress: z.string(),
+        createdAt: z.string().datetime(),
+      })
+      .nullable(),
+    predictions: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        outcome: z.string(),
+        amount: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    claims: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        amount: z.string(),
+        status: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    disputes: z.array(
+      z.object({
+        id: z.string(),
+        marketId: z.string(),
+        reason: z.string(),
+        status: z.string(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+    totals: z.object({
+      predictions: z.number().int(),
+      claims: z.number().int(),
+      disputes: z.number().int(),
+    }),
+  })
+  .openapi("AdminUserView");
+
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/users/{address}",
+  operationId: "getAdminUser",
+  tags: ["Admin"],
+  summary: "Get aggregated user data for admin support",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ address: z.string() }) },
+  responses: {
+    200: {
+      description: "Admin user view",
+      content: { "application/json": { schema: z.object({ data: AdminUserView }) } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    403: {
+      description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "User not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
 // ── /api/admin/audit ────────────────────────────────────────────────────────
 
 const AuditEntry = z
@@ -909,6 +1365,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/admin/audit/export",
+  operationId: "exportAdminAuditLog",
   tags: ["Admin"],
   summary: "Export audit log as NDJSON",
   security: [{ bearerAuth: [] }],
@@ -937,6 +1394,236 @@ registry.registerPath({
     },
     403: {
       description: "Forbidden",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// ── /api/admin/plugins ─────────────────────────────────────────────────────
+
+const PluginView = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    enabled: z.boolean(),
+    config: z.any(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("PluginView");
+
+const CreatePluginRequest = z
+  .object({
+    name: z.string().min(1).max(255),
+    description: z.string().max(1000).optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.unknown()).optional(),
+  })
+  .openapi("CreatePluginRequest");
+
+const UpdatePluginRequest = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().max(1000).nullable().optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.unknown()).optional(),
+  })
+  .openapi("UpdatePluginRequest");
+
+const DeletePluginResult = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+  })
+  .openapi("DeletePluginResult");
+
+// GET /api/admin/plugins
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/plugins",
+  operationId: "listAdminPlugins",
+  tags: ["Admin"],
+  summary: "List all plugins (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    query: z.object({
+      enabled: z.enum(["true", "false"]).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      offset: z.coerce.number().int().nonnegative().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Paginated list of plugins",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.array(PluginView),
+            total: z.number().int(),
+          }),
+        },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// POST /api/admin/plugins
+registry.registerPath({
+  method: "post",
+  path: "/api/admin/plugins",
+  operationId: "createAdminPlugin",
+  tags: ["Admin"],
+  summary: "Create a new plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: CreatePluginRequest } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Plugin created",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    409: {
+      description: "Plugin name already exists",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// GET /api/admin/plugins/{id}
+registry.registerPath({
+  method: "get",
+  path: "/api/admin/plugins/{id}",
+  operationId: "getAdminPlugin",
+  tags: ["Admin"],
+  summary: "Get a single plugin by ID (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: {
+      description: "Plugin details",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Invalid ID",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// PATCH /api/admin/plugins/{id}
+registry.registerPath({
+  method: "patch",
+  path: "/api/admin/plugins/{id}",
+  operationId: "updateAdminPlugin",
+  tags: ["Admin"],
+  summary: "Update a plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: { "application/json": { schema: UpdatePluginRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Plugin updated",
+      content: {
+        "application/json": { schema: z.object({ data: PluginView }) },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    429: {
+      description: "Rate limit exceeded",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+  },
+});
+
+// DELETE /api/admin/plugins/{id}
+registry.registerPath({
+  method: "delete",
+  path: "/api/admin/plugins/{id}",
+  operationId: "deleteAdminPlugin",
+  tags: ["Admin"],
+  summary: "Delete a plugin (admin only)",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: {
+      description: "Plugin deleted",
+      content: {
+        "application/json": { schema: z.object({ data: DeletePluginResult }) },
+      },
+    },
+    400: {
+      description: "Invalid ID",
+      content: { "application/json": { schema: ValidationErrorBody } },
+    },
+    403: {
+      description: "Forbidden — missing or non-admin JWT",
+      content: { "application/json": { schema: ErrorBody } },
+    },
+    404: {
+      description: "Plugin not found",
       content: { "application/json": { schema: ErrorBody } },
     },
     429: {

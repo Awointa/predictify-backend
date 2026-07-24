@@ -2,20 +2,18 @@ import { Router } from "express";
 import { z } from "zod";
 import { getLeaderboard, getLeaderboardWithRefresh, getUserLeaderboardEntry } from "../services/leaderboardService";
 import { rateLimitAnon } from "../middleware/rateLimitAnon";
+import { RouteErrorFactory } from "../errors";
 
 export const leaderboardRouter = Router();
 
-// Throttle anonymous read traffic; authenticated Bearer callers bypass.
 leaderboardRouter.use(rateLimitAnon);
 
-// Enum for valid periods
 export enum LeaderboardPeriod {
   ALL_TIME = "all-time",
   MONTHLY = "monthly",
   WEEKLY = "weekly",
 }
 
-// Zod validation schema for query parameters
 const leaderboardQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(50),
   offset: z.coerce.number().int().nonnegative().default(0),
@@ -25,7 +23,6 @@ const leaderboardQuerySchema = z.object({
 
 export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 
-// GET /api/leaderboard - Get leaderboard with optional refresh and period filter
 leaderboardRouter.get("/", async (req, res, next) => {
   try {
     const { limit, offset, refresh, period } = leaderboardQuerySchema.parse(req.query);
@@ -49,7 +46,6 @@ leaderboardRouter.get("/", async (req, res, next) => {
   }
 });
 
-// GET /api/leaderboard/user/:stellarAddress - Get specific user's leaderboard entry
 leaderboardRouter.get("/user/:stellarAddress", async (req, res, next) => {
   try {
     const { period } = z.object({
@@ -58,8 +54,7 @@ leaderboardRouter.get("/user/:stellarAddress", async (req, res, next) => {
 
     const entry = await getUserLeaderboardEntry(req.params.stellarAddress, period);
     if (!entry) {
-      res.status(404).json({ error: { code: "not_found" } });
-      return;
+      throw RouteErrorFactory.notFound("Leaderboard entry not found");
     }
     res.json({ data: entry });
   } catch (e) {

@@ -1,19 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * Admin feature/unfeature router for the home page.
- *
- *   POST   /api/admin/markets/:id/feature   → mark a market as featured (idempotent)
- *   DELETE /api/admin/markets/:id/feature   → unmark a market (idempotent)
- *
- * Both routes are guarded by `requireAdmin` (returns 403 unauthenticated /
- * non-admin) and rate-limited to 60 requests per minute per admin token.
- *
- * The mutation is split into two verbs (POST/DELETE) rather than a single
- * PATCH so each action is independently auditable, idempotent, and discoverable
- * in API docs without overloading a generic PATCH payload.
- */
-
-import { Router, type Request, type Response } from "express";
+import { Router, type Request } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { requireAdmin } from "../../middleware/requireAdmin";
@@ -24,12 +9,8 @@ import {
   MarketArchivedError,
   MarketNotFoundError,
 } from "../../services/marketFeatureService";
-import {
-  disableMarket,
-  MarketAlreadyDisabledError,
-} from "../../services/marketService";
+import { RouteErrorFactory } from "../../errors";
 
-/** Pulls the first valid IP from X-Forwarded-For or falls back to socket/ip. */
 function extractClientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string") {
@@ -51,7 +32,6 @@ function requestIdOf(req: { id?: unknown }): string {
 }
 
 export interface AdminMarketsRouterOptions {
-  /** Requests per minute per admin token. Default: 60 */
   rateLimitPerMinute?: number;
 }
 
@@ -61,9 +41,6 @@ export function createAdminMarketsRouter(
   const router = Router();
   const limit = opts.rateLimitPerMinute ?? 60;
 
-  // Per-admin-token bucket so multiple admins don't share state. Falls back to
-  // IP for unauthenticated callers so they are still throttled before reaching
-  // requireAdmin.
   router.use(
     rateLimit({
       windowMs: 60_000,
@@ -76,33 +53,22 @@ export function createAdminMarketsRouter(
     }),
   );
 
-  // Admin guard
   router.use(requireAdmin);
 
   const handle = async (
-    req: Request,
-    res: Response,
+    req: import("express").Request,
+    res: import("express").Response,
     operation: "feature" | "unfeature",
   ): Promise<void> => {
     const parsed = paramsSchema.safeParse(req.params);
     const requestId = requestIdOf({ id: req.id });
 
     if (!parsed.success) {
-      res.status(400).json({
-        error: {
-          code: "validation_error",
-          details: parsed.error.issues,
-          requestId,
-        },
-      });
-      return;
+      throw RouteErrorFactory.validation("Invalid market ID");
     }
 
     if (!req.adminAddress) {
-      // requireAdmin guarantees this in production, but the guard narrows
-      // the type defensively for callers that bypass it in tests.
-      res.status(401).json({ error: { code: "unauthorized", requestId } });
-      return;
+      throw RouteErrorFactory.unauthorized("Authentication required");
     }
 
     const handler = operation === "feature" ? featureMarket : unfeatureMarket;
@@ -114,16 +80,10 @@ export function createAdminMarketsRouter(
       res.status(200).json({ data: result });
     } catch (err) {
       if (err instanceof MarketNotFoundError) {
-        res.status(404).json({
-          error: { code: "not_found", requestId },
-        });
-        return;
+        throw RouteErrorFactory.notFound("Market not found");
       }
       if (err instanceof MarketArchivedError) {
-        res.status(400).json({
-          error: { code: err.code, message: err.message, requestId },
-        });
-        return;
+        throw RouteErrorFactory.badRequest(err.message);
       }
       throw err;
     }
@@ -182,5 +142,4 @@ export function createAdminMarketsRouter(
   return router;
 }
 
-// Default export wired into src/index.ts.
 export const adminMarketsRouter = createAdminMarketsRouter();

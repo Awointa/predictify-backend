@@ -7,24 +7,31 @@ import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { metricsMiddleware } from "./metrics/httpMetrics";
 import { idempotency } from "./middleware/idempotency";
-import { apiVersionMiddleware } from "./middleware/apiVersion";
-import { defaultBodyLimitMiddleware, webhookBodyLimitMiddleware } from "./middleware/bodyLimit";
+import { defaultBodySizeLimitMiddleware, webhookBodySizeLimitMiddleware } from "./middleware/bodySize";
 import { healthRouter } from "./routes/health";
 import dependenciesRouter from "./routes/healthz/dependencies";
+import { createReadyRouter } from "./routes/health/ready";
+import { redisConnection } from "./queue";
 import { authRouter } from "./routes/auth";
 import { marketsRouter } from "./routes/markets";
 import { predictionsRouter } from "./routes/predictions";
 import { usersRouter } from "./routes/users";
 import { userPortfolioRouter } from "./routes/users/portfolio";
+import { devicesRouter } from "./routes/devices";
+import { adminFeatureFlagsRouter } from "./routes/admin/feature-flags";
+import { adminUsersRouter } from "./routes/adminUsers";
 import { leaderboardRouter } from "./routes/leaderboard";
 import { globalLeaderboardRouter } from "./routes/leaderboard/global";
 import { devicesRouter } from "./routes/devices";
 import { createDocsRouter } from "./routes/docs";
+import { devicesRouter } from "./routes/devices";
+import { sessionsRouter } from "./routes/me/sessions";
 import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
 import { adminSchemaVersionsRouter } from "./routes/admin/schema-versions";
+import { devicesRouter } from "./routes/devices";
 import { errorHandler } from "./middleware/errorHandler";
 import { stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 import { requestContextStorage } from "./lib/requestContext";
@@ -32,11 +39,13 @@ import { REQUEST_ID_HEADER } from "./lib/http";
 import { register } from "./metrics/registry";
 import { connectWithRetry, closeDb, db } from "./db/client";
 import { stopScheduler } from "./services/scheduler";
+import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 import { WebhookWorker } from "./workers/webhookWorker";
 import { marketResolverWorker } from "./workers/marketResolver";
 import { backupVerificationWorker } from "./workers/backupVerificationWorker";
 import { reconciliationWorker } from "./workers/reconciliationWorker";
-import { startSlowQueryAlerter, stopSlowQueryAlerter } from "./workers/slowQueryAlerter";
+import { devicesRouter } from "./routes/devices";
+import { startIndexerHealthProbe, stopIndexerHealthProbe } from "./jobs/indexerHealthProbe";
 
 const docsEnabled = env.NODE_ENV !== "production" || process.env.ENABLE_DOCS === "true";
 
@@ -49,12 +58,25 @@ function sanitizeRequestId(raw: string): string | undefined {
   return sanitized.length > 0 ? sanitized : undefined;
 }
 
-export interface AppDeps {
-  webhooks?: any;
+/** Dependency-injection options for `createApp`. */
+export interface CreateAppOptions {
+  /** Webhook store + dispatcher to inject into admin webhook routes.
+   *  When omitted, those routes are not mounted (production wires them via
+   *  `DrizzleWebhookStore` after `connectWithRetry()` resolves). */
+  webhooks?: {
+    store: WebhookStore;
+    dispatcher: WebhookDispatcher;
+  };
 }
 
 export function createApp(_deps: AppDeps = {}): express.Express {
   const app = express();
+
+  // Disable Express's built-in ETag generation — we manage strong ETags
+  // explicitly in src/middleware/etag.ts for the resources that need them.
+  // Leaving Express's weak ETags enabled would add spurious `W/"..."` headers
+  // on every JSON response, including error envelopes.
+  app.set("etag", false);
 
   if (env.TRUST_PROXY) {
     app.set("trust proxy", true);
@@ -65,9 +87,6 @@ export function createApp(_deps: AppDeps = {}): express.Express {
   }
 
   app.use(helmet());
-  app.use("/api/admin/webhooks", webhookBodyLimitMiddleware);
-  app.use(apiVersionMiddleware);
-  app.use(defaultBodyLimitMiddleware);
 
   app.use(
     pinoHttp({
@@ -95,9 +114,13 @@ export function createApp(_deps: AppDeps = {}): express.Express {
     },
   );
 
+  app.use("/api/admin/webhooks", webhookBodySizeLimitMiddleware);
+  app.use(defaultBodySizeLimitMiddleware);
+
   app.use(metricsMiddleware);
   app.use("/health", healthRouter);
   app.use("/healthz/dependencies", dependenciesRouter);
+  app.use("/api/health/ready", createReadyRouter({ db, redis: redisConnection }));
 
   const mutationMethods = ["POST", "PATCH"] as const;
   app.use("/api", (req, res, next) =>
@@ -111,14 +134,17 @@ export function createApp(_deps: AppDeps = {}): express.Express {
   app.use("/api/predictions", predictionsRouter);
   app.use("/api/leaderboard", leaderboardRouter);
   app.use("/api/leaderboard/global", globalLeaderboardRouter);
+  app.use("/api/rate-limit", rateLimitStatusRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/users", socialRouter);
   app.use("/api/users", userPortfolioRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/me/devices", devicesRouter);
+  app.use("/api/me/sessions", sessionsRouter);
   app.use("/api/admin/audit", adminAuditRouter);
+  app.use("/api/admin/users", adminUsersRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
-  app.use("/api/admin/schema-versions", adminSchemaVersionsRouter);
+  app.use("/api/admin/db", adminDbVacuumRouter);
 
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
@@ -141,7 +167,6 @@ export function createApp(_deps: AppDeps = {}): express.Express {
 if (require.main === module) {
   const app = createApp();
   let webhookWorker: WebhookWorker | null = null;
-  let probeHandle: NodeJS.Timeout | null = null;
 
   const stopWorkers = async (): Promise<void> => {
     logger.info("Stopping queue workers");
@@ -161,8 +186,9 @@ if (require.main === module) {
       marketResolverWorker.start();
       backupVerificationWorker.start();
       reconciliationWorker.start();
-      startSlowQueryAlerter();
+      probeHandle = startIndexerHealthProbe();
 
+      const probeHandle = startIndexerHealthProbe();
       app.listen(env.PORT, () => {
         logger.info({ port: env.PORT, env: env.NODE_ENV }, "predictify-backend listening");
         logger.info(`Swagger UI available at http://localhost:${env.PORT}/docs`);
@@ -175,7 +201,6 @@ if (require.main === module) {
           process.exit(1);
         }, 5000).unref();
 
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         await closeDb();
         clearTimeout(forceExit);
@@ -184,7 +209,6 @@ if (require.main === module) {
 
       process.on("SIGINT", () => {
         logger.info("SIGINT received, shutting down gracefully");
-        if (probeHandle) stopIndexerHealthProbe(probeHandle);
         stopScheduler();
         process.exit(0);
       });

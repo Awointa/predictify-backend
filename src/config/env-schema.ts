@@ -68,6 +68,14 @@ const baseSchema = z.object({
   SETTLE_CONFIRMER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5_000),
   SETTLE_CONFIRMER_CONFIRMATION_LEDGERS: z.coerce.number().int().positive().default(2),
 
+  // ── Slow Query Alerter ────────────────────────────────────
+  SLOW_QUERY_ALERTER_ENABLED: z.coerce.boolean().default(false),
+  SLOW_QUERY_ALERTER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  SLOW_QUERY_ALERTER_MEAN_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(100),
+  SLOW_QUERY_ALERTER_MAX_EXEC_TIME_THRESHOLD_MS: z.coerce.number().int().positive().default(500),
+  SLOW_QUERY_ALERTER_LIMIT: z.coerce.number().int().positive().default(10),
+  SLOW_QUERY_ALERTER_QUERY_MAX_LENGTH: z.coerce.number().int().positive().default(1000),
+
   // ── Metrics ───────────────────────────────────────────────
   /** Bearer token required to access /api/metrics. Empty string (default) means no auth. */
   METRICS_AUTH_TOKEN: z.string().default(""),

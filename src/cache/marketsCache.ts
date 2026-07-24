@@ -4,39 +4,23 @@ import { getRequestId } from "../lib/requestContext";
 
 export const marketCacheKeys = {
   all: "markets:all",
-  byId: (id: string) => `markets:${id}`,
+  byId: (marketId: string) => `markets:${marketId}`,
 };
 
 export async function invalidateMarketCache(marketId: string): Promise<void> {
+  const requestId = getRequestId();
   const keys = [marketCacheKeys.byId(marketId), marketCacheKeys.all];
-  try {
-    await Promise.all(
-      keys.map(async (key) => {
-        try {
-          await redisConnection.del(key);
-        } catch (err) {
-          logger.error({ marketId, key, err }, "Failed to delete cache key");
-          throw err;
-        }
-      })
-    );
-    logger.info(
-      {
-        requestId: getRequestId(),
-        marketId,
-        keys,
-      },
-      "Market cache invalidated"
-    );
-  } catch (err) {
+
+  const results = await Promise.allSettled(keys.map((key) => redisConnection.del(key)));
+  const failed = results.filter((result) => result.status === "rejected");
+
+  if (failed.length > 0) {
     logger.error(
-      {
-        requestId: getRequestId(),
-        marketId,
-        keys,
-        err,
-      },
-      "Failed to invalidate market cache"
+      { requestId, marketId, keys, errors: failed.map((result) => (result as PromiseRejectedResult).reason) },
+      "Failed to invalidate market cache",
     );
+    return;
   }
+
+  logger.info({ requestId, marketId, keys }, "Market cache invalidated");
 }
