@@ -450,132 +450,42 @@ components:
         - id
         - action
         - createdAt
-    ExplainResponseBody:
+    AdminReindexRequest:
       type: object
+      description: >
+        Body for POST /api/admin/reindex. Specifies the ledger sequence number
+        from which reindexing should begin. The upper bound is resolved automatically
+        from the current Soroban RPC chain tip.
+      properties:
+        ledger:
+          type: integer
+          minimum: 1
+          description: >
+            Starting ledger sequence number (inclusive). Must be a positive integer.
+            The indexer will backfill from this ledger to the current chain tip,
+            applying the configured INDEXER_REWIND_LEDGERS overlap for reorg safety.
+      required:
+        - ledger
+    AdminReindexResponse:
+      type: object
+      description: Resolved ledger range for the triggered reindex operation.
       properties:
         data:
           type: object
           properties:
-            queryId:
-              type: string
-            explainPlan:
-              type: array
-              items:
-                type: string
+            from:
+              type: integer
+              description: The starting ledger supplied in the request body.
+            to:
+              type: integer
+              description: The chain tip resolved at the time the request was processed.
           required:
-            - queryId
-            - explainPlan
+            - from
+            - to
       required:
         - data
-    ExplainRequestBody:
-      type: object
-      properties:
-        queryId:
-          type: string
-          description: Allowlisted query ID
-        params:
-          type: array
-          items:
-            nullable: true
-          default: []
-          description: Query parameters
-      required:
-        - queryId
-    CheckStatus:
-      type: string
-      enum:
-        - ok
-        - degraded
-        - error
-    DbPoolStats:
-      type: object
-      properties:
-        total:
-          type: integer
-          description: Total connections in pool
-        idle:
-          type: integer
-          description: Idle (available) connections
-        waiting:
-          type: integer
-          description: Clients waiting for a connection
-      required:
-        - total
-        - idle
-        - waiting
-    DbPoolCheck:
-      type: object
-      properties:
-        status:
-          $ref: '#/components/schemas/CheckStatus'
-        latencyMs:
-          type: integer
-        stats:
-          $ref: '#/components/schemas/DbPoolStats'
-        error:
-          type: string
-      required:
-        - status
-        - latencyMs
-        - stats
-    IndexerCheck:
-      type: object
-      properties:
-        status:
-          $ref: '#/components/schemas/CheckStatus'
-        latencyMs:
-          type: integer
-        lastIndexedLedger:
-          type: integer
-          nullable: true
-        chainTip:
-          type: integer
-          nullable: true
-        lagLedgers:
-          type: integer
-          nullable: true
-        error:
-          type: string
-      required:
-        - status
-        - latencyMs
-        - lastIndexedLedger
-        - chainTip
-        - lagLedgers
-    RpcCheck:
-      type: object
-      properties:
-        status:
-          $ref: '#/components/schemas/CheckStatus'
-        latencyMs:
-          type: integer
-        latestLedger:
-          type: integer
-          nullable: true
-        error:
-          type: string
-      required:
-        - status
-        - latencyMs
-        - latestLedger
-    AdminHealthDetail:
-      type: object
-      properties:
-        dbPool:
-          $ref: '#/components/schemas/DbPoolCheck'
-        indexer:
-          $ref: '#/components/schemas/IndexerCheck'
-        rpc:
-          $ref: '#/components/schemas/RpcCheck'
-        checkedAt:
-          type: string
-          format: date-time
-      required:
-        - dbPool
-        - indexer
-        - rpc
-        - checkedAt
   parameters: {}
+
 paths:
   /health:
     get:
@@ -1488,128 +1398,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-
-  /api/admin/webhooks/dlq:
-    get:
-      summary: List dead-lettered webhook deliveries
-      description: |
-        Returns a paginated, newest-first list of dead-lettered webhook deliveries
-        for operator review. Pagination is keyset-based so listings stay stable
-        while the DLQ is being actively written to or replayed.
+  /api/admin/reindex:
+    post:
+      operationId: adminReindex
       tags:
-        - Admin Webhooks
+        - Admin
+      summary: Trigger a reindex from a specific ledger (admin only)
+      description: >
+        Resolves the current Soroban chain tip and backfills all on-chain
+        Predictify contract events in the range [ledger, chainTip]. Work is
+        chunked by INDEXER_BACKFILL_CHUNK_SIZE with a INDEXER_REWIND_LEDGERS
+        overlap for reorg-safe deduplication. The operation is idempotent —
+        re-running it for the same range is safe due to ON CONFLICT DO NOTHING
+        upserts. A structured audit-log entry is written on success and the
+        admin_reindex_total Prometheus counter is incremented.
       security:
         - bearerAuth: []
-      parameters:
-        - name: limit
-          in: query
-          description: Items per page (1–100, default 20). Non-numeric values return 400.
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: cursor
-          in: query
-          description: Opaque page token from a previous response. Omit to start from the first page.
-          required: false
-          schema:
-            type: string
-            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminReindexRequest'
+            example:
+              ledger: 54321
       responses:
         '200':
-          description: Paginated list of DLQ items
+          description: Reindex triggered successfully. Returns the resolved ledger range.
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - nextCursor
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      required:
-                        - id
-                        - originalId
-                        - eventId
-                        - eventType
-                        - targetUrl
-                        - payloadBase64
-                        - signature
-                        - attempts
-                        - maxAttempts
-                        - lastError
-                        - failedAt
-                        - replayedAt
-                        - replayDeliveryId
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        originalId:
-                          type: string
-                          format: uuid
-                          description: ID of the original live delivery that was dead-lettered
-                        eventId:
-                          type: string
-                        eventType:
-                          type: string
-                          example: market.resolved
-                        targetUrl:
-                          type: string
-                          format: uri
-                        payloadBase64:
-                          type: string
-                          format: byte
-                          description: Original signed request body, base64-encoded
-                        signature:
-                          type: string
-                          description: HMAC-SHA256 signature over the original payload bytes
-                        headers:
-                          type: object
-                          nullable: true
-                          additionalProperties:
-                            type: string
-                        attempts:
-                          type: integer
-                        maxAttempts:
-                          type: integer
-                        lastError:
-                          type: string
-                          description: Error message from the final failed attempt
-                        failedAt:
-                          type: string
-                          format: date-time
-                        replayedAt:
-                          type: string
-                          format: date-time
-                          nullable: true
-                        replayDeliveryId:
-                          type: string
-                          format: uuid
-                          nullable: true
-                  nextCursor:
-                    type: string
-                    nullable: true
-                    description: Opaque cursor for the next page; null if this is the last page
+                $ref: '#/components/schemas/AdminReindexResponse'
+              example:
+                data:
+                  from: 54321
+                  to: 55000
         '400':
-          description: Invalid query parameters (non-numeric limit or empty cursor)
+          description: Validation error (ledger missing or not a positive integer)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorBody'
+                $ref: '#/components/schemas/ValidationErrorBody'
         '403':
-          description: Missing, invalid, or non-admin JWT
+          description: Missing or invalid admin JWT
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
         '429':
-          description: Rate limit exceeded
+          description: Rate limit exceeded (60 req/min per admin token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Internal server error (e.g. Soroban RPC unreachable)
           content:
             application/json:
               schema:

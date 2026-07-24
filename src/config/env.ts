@@ -12,8 +12,6 @@ const schema = z.object({
   JWT_ISSUER: z.string().default("predictify"),
   JWT_AUDIENCE: z.string().default("predictify-app"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-  // Optional multi-key ring for zero-downtime JWT rotation.
-  // Format: "kid1:secret1,kid2:secret2" — see src/utils/keyRing.ts.
   JWT_KEYS: z.string().optional(),
   JWT_ACTIVE_KID: z.string().optional(),
   WORKER_HEARTBEAT_SECONDS: z.coerce.number().int().positive().default(30),

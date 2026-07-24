@@ -1056,62 +1056,45 @@ registry.registerPath({
   },
 });
 
-// ── /api/admin/db/explain ───────────────────────────────────────────────────
-
-const ExplainRequestBody = z
-  .object({
-    queryId: z.string().describe("Allowlisted query ID"),
-    params: z.array(z.any()).default([]).describe("Query parameters"),
-  })
-  .openapi("ExplainRequestBody");
-
-const ExplainResponseBody = z
-  .object({
-    data: z.object({
-      queryId: z.string(),
-      explainPlan: z.array(z.string()),
-    }),
-  })
-  .openapi("ExplainResponseBody");
+// ── /api/admin/reindex ─────────────────────────────────────────────────────
 
 registry.registerPath({
   method: "post",
-  path: "/api/admin/db/explain",
+  path: "/api/admin/reindex",
   tags: ["Admin"],
-  summary: "Execute EXPLAIN ANALYZE on allowlisted queries",
+  summary: "Trigger an indexer reindex from a specific ledger (admin only)",
   security: [{ bearerAuth: [] }],
   request: {
     body: {
       content: {
         "application/json": {
-          schema: ExplainRequestBody,
+          schema: z.object({
+            ledger: z.number().int().positive(),
+          }),
         },
       },
     },
   },
   responses: {
     200: {
-      description: "Explain plan generated successfully",
+      description: "Reindex request accepted",
       content: {
         "application/json": {
-          schema: ExplainResponseBody,
+          schema: z.object({
+            data: z.object({
+              from: z.number().int().positive(),
+              to: z.number().int().positive(),
+            }),
+          }),
         },
       },
     },
     400: {
-      description: "Validation error",
+      description: "Invalid request body",
       content: { "application/json": { schema: ValidationErrorBody } },
     },
-    401: {
-      description: "Unauthorized",
-      content: { "application/json": { schema: ErrorBody } },
-    },
     403: {
-      description: "Forbidden",
-      content: { "application/json": { schema: ErrorBody } },
-    },
-    429: {
-      description: "Rate limit exceeded",
+      description: "Forbidden — missing or non-admin JWT",
       content: { "application/json": { schema: ErrorBody } },
     },
   },

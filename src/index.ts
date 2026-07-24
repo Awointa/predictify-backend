@@ -22,7 +22,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { socialRouter } from "./routes/social";
 import { adminAuditRouter } from "./routes/admin/audit";
 import { adminMarketsRouter } from "./routes/admin/markets";
-import { devicesRouter } from "./routes/devices";
+import { adminReindexRouter } from "./routes/admin/reindex";
 import { errorHandler } from "./middleware/errorHandler";
 import type { WebhookStore } from "./services/webhookStore";
 import type { WebhookDispatcher } from "./services/webhookDispatcher";
@@ -128,24 +128,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/me/devices", devicesRouter);
   app.use("/api/admin/audit", adminAuditRouter);
   app.use("/api/admin/markets", adminMarketsRouter);
-  app.use("/api/admin/users", adminImpersonateRouter);
-
-  // Admin webhook routes — mounted only when deps are provided (tests inject an
-  // in-memory store; production wires DrizzleWebhookStore after DB connects).
-  if (options.webhooks) {
-    const { store, dispatcher } = options.webhooks;
-    // Dedicated DLQ list: GET /api/admin/webhooks/dlq
-    // Has Zod validation, structured logging, and rate limiting.
-    app.use(
-      "/api/admin/webhooks/dlq",
-      createAdminDlqRouter({ store }),
-    );
-    // Replay + DLQ list (legacy): POST /api/admin/webhooks/dlq/:id/replay
-    app.use(
-      "/api/admin/webhooks",
-      createAdminWebhooksRouter({ store, dispatcher }),
-    );
-  }
+  app.use("/api/admin/reindex", adminReindexRouter);
 
   app.get("/metrics", async (req, res) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
