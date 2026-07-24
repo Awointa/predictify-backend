@@ -35,6 +35,27 @@ HTTP **429 Too Many Requests** with:
 for the caller's IP. Authenticated callers (Bearer token) receive a
 `bypasses: true` response.
 
+## Admin inspection endpoint
+
+`GET /api/admin/rate-limit/inspect/:address` is an admin-only read-only
+inspection endpoint for a target Stellar address. It returns the current
+sliding-window usage, remaining quota, and reset timestamp for the address.
+
+### Response (200)
+
+```json
+{
+  "data": {
+    "address": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "limit": 60,
+    "used": 3,
+    "remaining": 57,
+    "windowMs": 60000,
+    "resetAt": "2026-07-24T12:00:00.000Z"
+  }
+}
+```
+
 ### Anonymous response (200)
 
 ```json
